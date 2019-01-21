@@ -7,35 +7,45 @@ import sys
 import numpy as np
 import skimage as sk
 import skimage.io as skio
+from skimage.transform import rescale
 
-def calc_optimal_offset(maxoffset, base_image, image):
-    array_width = maxoffset * 2 + 1
-    result = np.ones((array_width, array_width))
+def multi_iteration_offset(image, base_image, maxoffset):
+    out_image = image
+    max_scale_factor = 4
 
-    #use numpy iterator nditer
-    #nicely parallelizable
-    #for each possible offset, calculate quadratic error
-    #(error: sum of value differences for each pixel)
-    for j in range(array_width):
-        for i in range(array_width):
-            #print((i,j))
-            rolled = np.roll(image, (i,j), axis=(0,1))
-            #print(rolled)
+#    if(base_image.shape[0]*base_image.shape[1] > 160000): #larger than ~400x400
+        #TODO more sophisticated scaling --> scale to approx 1600000 area
+#        scale_factor = int(np.max(base_image.shape)/400)
 
-            res = np.subtract(base_image, rolled)
-            res = np.absolute(res)
-            res = np.sum(res)
-            res = np.power(res, 2)
-            #print(res)
-            result[j][i] = res
-    #print(result)
-    min_index = np.argmin(result)
-    min_index = np.unravel_index(min_index, (array_width, array_width))
-    min_index = (min_index[1], min_index[0])
-    #print("min_index" + str(min_index))
-    return min_index
+    for n in reversed(range(1,max_scale_factor+1)):
+        print(n)
+        scaled = sk.transform.rescale(image, (1/n, 1/n))
+        scaled_base = sk.transform.rescale(base_image, 1.0/float(n))
+        movement = find_offset_by_subtraction(scaled, scaled_base, maxoffset)
+        print(movement)
+        
+        scaled_movement = np.multiply(movement, n)
+        print(scaled_movement)
+        out_image = np.roll(image, scaled_movement, axis=(0,1))
+        
+        skio.imshow(scaled)
+        skio.show()
 
-def align(image, base_image, maxoffset=15):
+
+        
+    return(0,0)
+
+def clip_edges(image, factor=10):
+    ##use a fraction (inner 2/n) of the image for comparison
+    print(image.shape)
+    width = image.shape[0]
+    height = image.shape[1]
+    reduced_image = image[int(width/factor):int(width-width/factor), int(height/factor):int(height-height/factor)]
+#    skio.imshow(reduced_image)
+#    skio.show()
+    return reduced_image
+
+def find_offset_by_subtraction(image, base_image, maxoffset):
     #create results array
     array_width = maxoffset * 2 + 1
     result = np.ones((array_width, array_width))
@@ -48,6 +58,7 @@ def align(image, base_image, maxoffset=15):
         for i in range(array_width):
             #print((i,j))
             rolled = np.roll(image, (i,j), axis=(0,1))
+
             #print(rolled)
 
             res = np.subtract(base_image, rolled)
@@ -56,14 +67,23 @@ def align(image, base_image, maxoffset=15):
             res = np.power(res, 2)
             #print(res)
             result[j][i] = res
-    #print(result)
     ##get minimum offset
-    #TODO fix inverted index
-    offset = np.argmin(result)
-    offset = np.unravel_index(offset, (array_width, array_width))
-    offset = (offset[1], offset[0])
-    print(offset)
-    return np.roll(image, offset, axis=(0,1))
+    index_of_min = np.argmin(result)
+    index_of_min = np.unravel_index(index_of_min, (array_width, array_width))
+    #print(result[index_of_min])
+    #print(np.average(result, axis=(0,1)))
+
+    #translate index into movement
+    movement = (index_of_min[1], index_of_min[0])
+    return movement
+
+def align(image, base_image, maxoffset=15):
+
+    reduced_image = clip_edges(image)
+    reduced_base = clip_edges(base_image)
+    #movement = multi_iteration_offset(reduced_image, reduced_base, maxoffset)
+    movement = find_offset_by_subtraction(reduced_image, reduced_base, maxoffset)
+    return np.roll(image, movement, axis=(0,1))
 
 def split_image(img):
     # calculer la hauteur de chaque partie (1/3 de la taille de l'image)
@@ -75,7 +95,15 @@ def split_image(img):
     r = img[2*height: 3*height]
     return(r,g,b)
 
-#print(sys.argv[1:])
+#dummy_base = [1,1,1,0,0, 1,1,1,0,0, 1,1,1,0,0, 0,0,0,0,0, 0,0,0,0,0]
+#dummy_base = np.reshape(dummy_base, (5,5))
+#dummy_image = [0,0,0,0,0, 0,0,1,1,1, 0,0,1,1,1, 0,0,1,1,1, 0,0,0,0,0]
+#dummy_image = np.reshape(dummy_image, (5,5))
+#
+#print(dummy_base)
+#aligned = align(dummy_image, dummy_base, 5)
+#print(aligned)
+
 for name in sys.argv[1:]:
     img = skio.imread(name)
     
@@ -88,47 +116,10 @@ for name in sys.argv[1:]:
 
     # créer l'image couleur
     img_out = np.dstack([ar, ag, b])
+    img_orig = np.dstack([r,g,b])
 
     # afficher l'image
+    skio.imshow(img_orig)
+    skio.show()
     skio.imshow(img_out)
     skio.show()
-
-# nom du fichier d'image
-# imgname = '00128utif'
-#imgname = '01890v.jpg'
-#imgname = 'images/00106v.jpg'
-#imgname = 'images/00757v.jpg'
-#imgname = 'images/00888v.jpg'
-#imgname = 'images/00889v.jpg'
-#
-## lire l'image
-#img = skio.imread(imgname)
-#
-## conversion en double
-#img = sk.img_as_float(img)
-#    
-#(r,g,b) = split_image(img)
-#
-## aligner les images... c'est ici que vous commencez à coder!
-## ces quelques fonctions pourraient vous être utiles:
-## np.roll, np.sum, sk.transform.rescale (for multiscale)
-#dummy_base = [[1,1,1,0,0], [1,1,1,0,0], [1,1,1,0,0], [0,0,0,0,0], [0,0,0,0,0]]
-#dummy_image = [[0,0,0,0,0], [0,0,1,1,1], [0,0,1,1,1], [0,0,1,1,1], [0,0,0,0,0]]
-##calc_optimal_offset(1, dummy_base, dummy_image)
-#
-##print(dummy_base)
-##aligned = align(dummy_image, dummy_base)
-##print(aligned)
-#
-#ag = align(g, b)
-#ar = align(r, b)
-## créer l'image couleur
-#img_out = np.dstack([ar, ag, b])
-
-## sauvegarder l'image
-#fname = '/out_path/out_fname.jpg'
-#skio.imsave(fname, img_out)
-
-## afficher l'image
-#skio.imshow(img_out)
-#skio.show()
