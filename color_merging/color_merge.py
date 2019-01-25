@@ -1,43 +1,45 @@
-# TP1, code python pour débuter
-
-# quelques librairies suggérées
-# vous pourriez aussi utiliser matplotlib et opencv pour lire, afficher et sauvegarder des images
-
 import sys
 import numpy as np
 import skimage as sk
 import skimage.io as skio
+import math
+import os
 from skimage.transform import rescale
 
 def multi_iteration_offset(image, base_image, maxoffset):
+    min_size = 400
     out_image = image
-    max_scale_factor = 4
+    movement_sum = (0,0)
 
-#    if(base_image.shape[0]*base_image.shape[1] > 160000): #larger than ~400x400
-        #TODO more sophisticated scaling --> scale to approx 1600000 area
-#        scale_factor = int(np.max(base_image.shape)/400)
+    #calculate the maximum scaling factor to have the smallest image be about 400px on the larger edge
+    larger_edge = np.argmax(base_image.shape)
+    max_scale_power = math.log(400.0/float(base_image.shape[larger_edge]))
+    max_scale_power = math.fabs(max_scale_power)
+    max_scale_factor = int(math.pow(2, max_scale_power))
+    #print(max_scale_factor)
 
     for n in reversed(range(1,max_scale_factor+1)):
         print(n)
-        scaled = sk.transform.rescale(image, (1/n, 1/n))
+        scaled = sk.transform.rescale(out_image, 1.0/float(n))
         scaled_base = sk.transform.rescale(base_image, 1.0/float(n))
+        #print("original: " + str(image.shape) + ", scaled: " + str(scaled.shape))
+
+        scaled = clip_edges(scaled)
+        scaled_base = clip_edges(scaled_base)
+
         movement = find_offset_by_subtraction(scaled, scaled_base, maxoffset)
-        print(movement)
         
+        print("movement: " + str(movement))
         scaled_movement = np.multiply(movement, n)
-        print(scaled_movement)
-        out_image = np.roll(image, scaled_movement, axis=(0,1))
+        print("scaled_movement: " + str(scaled_movement))
+        movement_sum += scaled_movement
+        print("movement_sum: " + str(movement_sum))
+        out_image = np.roll(out_image, scaled_movement, axis=(0,1))
         
-        skio.imshow(scaled)
-        skio.show()
-
-
-        
-    return(0,0)
+    return movement_sum
 
 def clip_edges(image, factor=10):
-    ##use a fraction (inner 2/n) of the image for comparison
-    print(image.shape)
+    ##use a fraction (inner n-2/n) of the image for comparison
     width = image.shape[0]
     height = image.shape[1]
     reduced_image = image[int(width/factor):int(width-width/factor), int(height/factor):int(height-height/factor)]
@@ -54,8 +56,10 @@ def find_offset_by_subtraction(image, base_image, maxoffset):
     ##(error: sum of value differences for each pixel)
     #TODO use numpy iterator nditer
     #TODO nicely parallelizable
-    for j in range(array_width):
-        for i in range(array_width):
+#    for j in range(array_width):
+#        for i in range(array_width):
+    for j in range(-maxoffset, maxoffset+1):
+        for i in range(-maxoffset, maxoffset+1):
             #print((i,j))
             rolled = np.roll(image, (i,j), axis=(0,1))
 
@@ -66,23 +70,32 @@ def find_offset_by_subtraction(image, base_image, maxoffset):
             res = np.sum(res)
             res = np.power(res, 2)
             #print(res)
-            result[j][i] = res
+            result[to_index(j, maxoffset)][to_index(i, maxoffset)] = res
     ##get minimum offset
     index_of_min = np.argmin(result)
     index_of_min = np.unravel_index(index_of_min, (array_width, array_width))
-    #print(result[index_of_min])
-    #print(np.average(result, axis=(0,1)))
+    print(result[index_of_min])
+    print(np.average(result, axis=(0,1)))
 
     #translate index into movement
-    movement = (index_of_min[1], index_of_min[0])
+    index = (index_of_min[1], index_of_min[0])
+    movement = to_movement(index, maxoffset)
+    #print(movement)
     return movement
+
+def to_movement(index, maxoffset):
+    #return index
+    return np.subtract(index, maxoffset)
+
+def to_index(movement, maxoffset):
+    return np.add(movement, maxoffset)
 
 def align(image, base_image, maxoffset=15):
 
-    reduced_image = clip_edges(image)
-    reduced_base = clip_edges(base_image)
-    #movement = multi_iteration_offset(reduced_image, reduced_base, maxoffset)
-    movement = find_offset_by_subtraction(reduced_image, reduced_base, maxoffset)
+#    reduced_image = clip_edges(image)
+#    reduced_base = clip_edges(base_image)
+    movement = multi_iteration_offset(image, base_image, maxoffset)
+#    movement = find_offset_by_subtraction(image, base_image, maxoffset)
     return np.roll(image, movement, axis=(0,1))
 
 def split_image(img):
@@ -97,11 +110,13 @@ def split_image(img):
 
 #dummy_base = [1,1,1,0,0, 1,1,1,0,0, 1,1,1,0,0, 0,0,0,0,0, 0,0,0,0,0]
 #dummy_base = np.reshape(dummy_base, (5,5))
-#dummy_image = [0,0,0,0,0, 0,0,1,1,1, 0,0,1,1,1, 0,0,1,1,1, 0,0,0,0,0]
+##dummy_image = [0,0,0,0,0, 0,0,1,1,1, 0,0,1,1,1, 0,0,1,1,1, 0,0,0,0,0]
+##dummy_image = [1,1,0,0,1, 1,1,0,0,1, 0,0,0,0,0, 0,0,0,0,0, 1,1,0,0,1]
+#dummy_image = [0,1,1,1,0, 0,1,1,1,0, 0,1,1,1,0, 0,0,0,0,0, 0,0,0,0,0]
 #dummy_image = np.reshape(dummy_image, (5,5))
-#
+##
 #print(dummy_base)
-#aligned = align(dummy_image, dummy_base, 5)
+#aligned = align(dummy_image, dummy_base, 4)
 #print(aligned)
 
 for name in sys.argv[1:]:
@@ -123,3 +138,7 @@ for name in sys.argv[1:]:
     skio.show()
     skio.imshow(img_out)
     skio.show()
+
+    name = os.path.basename(name)
+    name = os.path.splitext(name)[0]
+    skio.imsave("personal_out/out_" + name + ".jpg", img_out)
