@@ -108,58 +108,44 @@ def split_image(img):
     r = img[2*height: 3*height]
     return(r,g,b)
 
-def remove_frame(img, threshold=0.08, area_fraction=4):
-    print(img.shape)
-    search_width = int(img.shape[1]/area_fraction)
-    search_height = int(img.shape[0]/area_fraction)
-    max_width = img.shape[1]
-    max_height = img.shape[0]
-    print(max_width, search_width, max_height, search_height)
+def remove_frame(img, threshold=0.07, area_fraction=4, step=1):
+    scale_factor = 4 #4
+    scaled_img = sk.transform.rescale(img, 1.0/float(scale_factor))
+    search_width = int(scaled_img.shape[1]/area_fraction)
+    search_height = int(scaled_img.shape[0]/area_fraction)
+    max_width = scaled_img.shape[1]
+    max_height = scaled_img.shape[0]
 
     #top border, left border, bottom border, right border (order is to enable modulo for axis when calculating avg)
     #TODO using list vs using range --> performance loss?
     search_ranges = [list(range(0,search_height)), list(range(0,search_width)), list(reversed(range(max_height-search_height, max_height))), list(reversed(range(max_width-search_width, max_width)))]
-#    print(search_ranges[0][0], search_ranges[1][0], search_ranges[2][0], search_ranges[3][0])
 
     new_borders = [] #to be filled with pixels to crop from each side, in the same order as search_ranges
     for range_index in range(len(search_ranges)):
-        print(range_index)
         border = search_ranges[range_index]
+        #this is where the order of the ranges comes in handy
         axis = range_index%2
-        print("axis:" + str(axis))
-        print("first elem: " + str(border[0]))
 
         #calculate the average of the first line of the border (horizontal or vertical)
-        #this is where the order of the ranges comes in handy
         if(axis==0):
-            old_avg = np.average(img[border[0],:], axis=axis) 
+            old_avg = np.average(scaled_img[border[0],:], axis=axis) 
         else:
-            old_avg = np.average(img[:,border[0]], axis=axis) 
+            old_avg = np.average(scaled_img[:,border[0]], axis=0)#axis 0 is used because of the array shape of the extracted column
         
         last_cut = border[0]
-        print("old average: " + str(old_avg))
-        for index in border:
-            #print(index)
+        for index in border[::step]:
             if(axis==0):
-                avg = np.average(img[index,:], axis=axis)
+                avg = np.average(scaled_img[index,:], axis=axis)
             else:
-                avg = np.average(img[:,index], axis=axis)
-            #print("average: " + str(avg))
+                avg = np.average(scaled_img[:,index], axis=0)#axis 0 is used because of the array shape of the extracted column
             diff = np.abs(np.subtract(avg, old_avg))
-            #print(diff)
             if(diff[0] > threshold or diff[1] > threshold or diff[2] > threshold):
-                #print("new cut")
-                #print(diff)
                 last_cut = index
             old_avg = avg
-        print(last_cut)
         new_borders.append(last_cut)
 
     #top border, left border, bottom border, right border (order is to enable modulo for axis when calculating avg)
-    print(new_borders)
-    print(new_borders[1],max_width-new_borders[3], new_borders[0],max_height-new_borders[2])
-    return sk.util.crop(img, ((new_borders[1],max_width-new_borders[3]), (new_borders[0],max_height-new_borders[2]), (0,0)))
-    #return sk.util.crop(img, ((new_borders[0],0), (0,0), (0,0)))
+    return sk.util.crop(img, ((new_borders[0]*scale_factor,(max_height-new_borders[2])*scale_factor), (new_borders[1]*scale_factor,(max_width-new_borders[3])*scale_factor), (0,0)))
 
 #dummy_base = [1,1,1,0,0, 1,1,1,0,0, 1,1,1,0,0, 0,0,0,0,0, 0,0,0,0,0]
 #dummy_base = np.reshape(dummy_base, (5,5))
