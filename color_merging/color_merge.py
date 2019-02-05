@@ -1,15 +1,20 @@
-import sys
 import numpy as np
 import skimage as sk
 import skimage.io as skio
 import math
-import os
 import simple_cb
 import cv2
 from skimage.transform import rescale
 
-#find optimal offset in multiple iterations
+"""
+a number of functions to align, merge and correct split color channel images
+"""
+
 def multi_iteration_offset(image, base_image, maxoffset):
+    """ returns a movement tuple (x,y)
+
+    find optimal offset in multiple iterations
+    """
     min_size = 400
     out_image = image
     movement_sum = (0,0)
@@ -22,8 +27,8 @@ def multi_iteration_offset(image, base_image, maxoffset):
 
     #starting with the largest scale factor (aka the smallest image), sum up the optimal movement
     for n in reversed(range(1,max_scale_factor+1)):
-        scaled = sk.transform.rescale(out_image, 1.0/float(n))
-        scaled_base = sk.transform.rescale(base_image, 1.0/float(n))
+        scaled = sk.transform.rescale(out_image, 1.0/float(n), multichannel=True, anti_aliasing=True)
+        scaled_base = sk.transform.rescale(base_image, 1.0/float(n), multichannel=True, anti_aliasing=True)
 
         clipped_scaled = clip_edges(scaled)
         clipped_scaled_base = clip_edges(scaled_base)
@@ -36,16 +41,11 @@ def multi_iteration_offset(image, base_image, maxoffset):
         
     return movement_sum
 
-##return a fraction (inner n-2/n) of the image for comparison
-def clip_edges(image, factor=10):
-    width = image.shape[0]
-    height = image.shape[1]
-    reduced_image = image[int(width/factor):int(width-width/factor), int(height/factor):int(height-height/factor)]
-    return reduced_image
-
-#find the optimal offset by calculating the sum of squared differences
-#for the interval x,y = [-maxoffset,maxoffset]
 def find_offset_by_subtraction(image, base_image, maxoffset):
+    """returns a movement tuple (x,y)
+
+    find the optimal offset by calculating the sum of squared differences for the interval x,y = [-maxoffset,maxoffset]
+    """
     #create results array and initialize
     array_width = maxoffset * 2 + 1
     result = np.ones((array_width, array_width))
@@ -72,6 +72,10 @@ def find_offset_by_subtraction(image, base_image, maxoffset):
     return movement
 
 def find_rotational_offset_by_subtraction(image, base_image, maxrot=10, step=0.1):
+    """returns a movement tuple (x,y)
+
+    find the optimal rotational offset by calculating the sum of squared differences for the interval x,y = [-maxoffset,maxoffset]
+    """
     min_size = 400
 
     #calculate the maximum scaling factor to have the image be about 400px on the larger edge
@@ -80,8 +84,8 @@ def find_rotational_offset_by_subtraction(image, base_image, maxrot=10, step=0.1
     max_scale_power = math.fabs(max_scale_power)
     max_scale_factor = int(math.pow(2, max_scale_power))
     
-    scaled = sk.transform.rescale(image, 1.0/float(max_scale_factor))
-    scaled_base = sk.transform.rescale(base_image, 1.0/float(max_scale_factor))
+    scaled = sk.transform.rescale(image, 1.0/float(max_scale_factor), multichannel=True, anti_aliasing=True)
+    scaled_base = sk.transform.rescale(base_image, 1.0/float(max_scale_factor), multichannel=True, anti_aliasing=True)
 
     array_width = int((maxrot*2)/step)
     result = np.ones(array_width)
@@ -104,30 +108,31 @@ def find_rotational_offset_by_subtraction(image, base_image, maxrot=10, step=0.1
 
     return best_rotation
 
-#convert an index (range [0,maxoffset]) to the corresponding movement (range [-maxoffset, maxoffset])
-def to_movement(index, maxoffset):
-    return np.subtract(index, maxoffset)
-
-#convert a movement (range [-maxoffset, maxoffset]) to the corresponding index (range [0,maxoffset])
-def to_index(movement, maxoffset):
-    return np.add(movement, maxoffset)
-
-#calculate optimal movement and apply
 def align(image, base_image, maxoffset=15):
+    """returns an image array
+
+    calculate optimal movement and apply
+    """
     movement = multi_iteration_offset(image, base_image, maxoffset)
     image = np.roll(image, movement, axis=(0,1))
     return image
 
-#calculate optimal movement and rotation and apply
 def align_with_rotation(image, base_image, maxoffset=15, maxrot=10, step=0.1):
+    """returns an image array
+
+    calculate optimal movement and rotation and apply
+    """
     rotation = find_rotational_offset_by_subtraction(image, base_image)
     image = sk.transform.rotate(image, rotation)
     movement = multi_iteration_offset(image, base_image, maxoffset)
     image = np.roll(image, movement, axis=(0,1))
     return image
 
-#use edges to find optimal movement and apply
 def align_edges(image, base_image, maxoffset=15):
+    """returns an image array
+
+    use edges to find optimal movement and apply
+    """
     cv_image = sk.img_as_ubyte(image)
     canny_edge_image = cv2.Canny(cv_image, 50, 200)
     canny_edge_image = sk.img_as_float(canny_edge_image)
@@ -140,8 +145,11 @@ def align_edges(image, base_image, maxoffset=15):
     image = np.roll(image, movement, axis=(0,1))
     return image
 
-#use gradient to find optimal movement and apply
 def align_gradient(image, base_image, maxoffset=15):
+    """returns an image array
+
+    use gradient to find optimal movement and apply
+    """
     cv_image = sk.img_as_ubyte(image)
     sobel_gradient_image = cv2.Sobel(cv_image, cv2.CV_64F,0,1,ksize=5)
     sobel_gradient_image = sk.img_as_float(sobel_gradient_image)
@@ -154,8 +162,11 @@ def align_gradient(image, base_image, maxoffset=15):
     image = np.roll(image, movement, axis=(0,1))
     return image
 
-#split an image with 3 split color canals (b,g,r) aligned vertically (on top of each other) into three separate images
 def split_image(img):
+    """returns a tuple with three image arrays
+
+    splits an image with 3 split color canals (b,g,r) aligned vertically (on top of each other) into three separate images
+    """
     #calculate height of each sub-image
     height = int(np.floor(img.shape[0] / 3.0))
 
@@ -166,9 +177,12 @@ def split_image(img):
 
     return(r,g,b)
 
-#find the borders on the outer edges of an image (eg created by aligning images) and remove them by clipping the image
 def remove_border(img, threshold=0.07, area_fraction=10, scale_factor=4):
-    scaled_img = sk.transform.rescale(img, 1.0/float(scale_factor))
+    """returns an image array
+
+    finds the borders on the outer edges of an image (eg created by aligning images) and removes them by clipping the image
+    """
+    scaled_img = sk.transform.rescale(img, 1.0/float(scale_factor), multichannel=True, anti_aliasing=True)
     search_width = int(scaled_img.shape[1]/area_fraction)
     search_height = int(scaled_img.shape[0]/area_fraction)
     max_width = scaled_img.shape[1]
@@ -210,46 +224,38 @@ def remove_border(img, threshold=0.07, area_fraction=10, scale_factor=4):
     return sk.util.crop(img, ((top_crop,bottom_crop), (left_crop,right_crop), (0,0)))
 
 def image_correct(img):
+    """returns an image array
+
+    uses denoising and color correction to make an image look better
+    """
     cv_img = sk.img_as_ubyte(img)
-    cv_img = simple_cb.simplest_cb(cv_img, 0.8)
+    cv_img = simple_cb.simplest_cb(cv_img, 0.8) #from https://gist.github.com/DavidYKay/9dad6c4ab0d8d7dbf3dc
     cv_img = cv2.fastNlMeansDenoisingColored(cv_img, None, 3,3,3,21)
     return sk.img_as_float(cv_img)
 
-for name in sys.argv[1:]:
-    img = skio.imread(name)
-    
-    img = sk.img_as_float(img)
+#helper functions
 
-    (r,g,b) = split_image(img)
+def clip_edges(image, factor=10):
+    """returns an image array
 
-    #all of the align functions call
-    multi_iteration_offset, which in turn calls find_offset_by_subtraction    
+    clip a fraction (1/n) of the image on each side
+    """
+    width = image.shape[0]
+    height = image.shape[1]
+    reduced_image = image[int(width/factor):int(width-width/factor), int(height/factor):int(height-height/factor)]
+    return reduced_image
 
-    ag = align(g, b)
-    ar = align(r, b)
+def to_movement(index, maxoffset):
+    """returns a tuple
 
-    #uncomment to use edges for alignment (Canny)
-#    ag = align_edges(g, b)
-#    ar = align_edges(r, b)
+    convert an index (range [0,maxoffset]) to the corresponding movement (range [-maxoffset, maxoffset])
+    """
+    return np.subtract(index, maxoffset)
 
-    #uncomment to use gradient for alignment (Sobel)
-#    ag = align_gradient(g, b)
-#    ar = align_gradient(r, b)
+def to_index(movement, maxoffset):
+    """returns a tuple
 
-    #create color image
-    img_out = np.dstack([ar, ag, b])
-    img_orig = np.dstack([r,g,b])
+    convert a movement (range [-maxoffset, maxoffset]) to the corresponding index (range [0,maxoffset])
+    """
+    return np.add(movement, maxoffset)
 
-
-    img = remove_border(img_out, 0.07, 10, 4)
-    img = image_correct(img_out)
-##    skio.imshow(img)
-##    skio.show()
-#    
-    # afficher l'image
-#    skio.imshow(img_orig)
-#    skio.show()
-
-#    name = os.path.basename(name)
-#    name = os.path.splitext(name)[0]
-#    skio.imsave("out_" + name + ".jpg", img_out)
