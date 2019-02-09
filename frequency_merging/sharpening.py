@@ -2,17 +2,18 @@ import numpy as np
 import skimage as sk
 import skimage.io as skio
 import skimage.filters
+import skimage.exposure
 import sys
+import os
 import skimage.color
 
 def sharpen(img, intensity=1.5):
-    #details = sk.color.rgb2grey(img)
-    blurred = sk.filters.gaussian(img, sigma=2)
-    details = np.subtract(img, blurred)
-    #details = sk.color.grey2rgb(details)
+    blurred = sk.filters.gaussian(img, sigma=5)
+    fft_img = np.fft.fft2(img) 
+    fft_blurred = np.fft.fft2(blurred)
+    fft_details = np.subtract(fft_img, fft_blurred)
+    details = np.fft.ifft2(fft_details).real
     details = np.multiply(details, intensity)
-    skio.imshow(details)
-    skio.show()
     img = np.add(img, details)
     return img
     
@@ -24,6 +25,7 @@ for name in sys.argv[1:]:
     img_orig = sk.img_as_float(img)
 
     img = sharpen(img_orig)
+    img = sk.exposure.rescale_intensity(img, in_range=(-1.0,1.0))
 
     #uncomment to view original image
     #skio.imshow(img_orig)
@@ -33,6 +35,6 @@ for name in sys.argv[1:]:
     skio.show()
     
     #uncomment to save image
-#    name = os.path.basename(name)
-#    name = os.path.splitext(name)[0]
-#    skio.imsave("out_" + name + ".jpg", img_out)
+    name = os.path.basename(name)
+    name = os.path.splitext(name)[0]
+    skio.imsave("sharpened/out_" + name + ".jpg", img)
