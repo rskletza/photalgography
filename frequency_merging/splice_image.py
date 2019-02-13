@@ -1,13 +1,12 @@
-import sys
-import os
 import numpy as np
 import skimage as sk
-import skimage.io as skio
 import skimage.filters
 import skimage.util
-import matplotlib.pyplot as plt
 
 def stacks(img, n):
+    """
+    returns an array with n frequency bands of the same size of an image (laplacian filter)
+    """
     bands = []
     last_img = img
     for i in range(1,n+1):
@@ -18,18 +17,12 @@ def stacks(img, n):
         last_img = filtered
 
     bands.append(last_img)
-    plt.axis("off")
-    fig = plt.figure(1,(len(bands)))
-    k = 1
-    for band in bands:
-        ax = fig.add_subplot(1,len(bands), k)
-        ax.imshow(np.add(band,0.5))
-        ax.axis('off')
-        k += 1
-    plt.show()
     return bands
 
 def rebuild_stacks(bands):
+    """
+    returns an image constructed from frequency bands (laplacian filter)
+    """
     result = np.zeros(bands[0].shape)
     for laplacian in bands:
         fft_laplacian = np.fft.fft2(laplacian)
@@ -40,6 +33,9 @@ def rebuild_stacks(bands):
     return result
 
 def sample(img, n):
+    """
+    returns a reduced image (achieved by sampling every nth pixel) 
+    """
     x_indices_set = set(range(img.shape[0]))
     x_indices_to_keep = set(range(1, img.shape[0],n))
     x_indices_to_delete = list(x_indices_set - x_indices_to_keep)
@@ -52,6 +48,9 @@ def sample(img, n):
     return img
 
 def upsample(img, n):
+    """
+    returns a blown up image (lossy reconstruction of sampled image)
+    """
     #insert a copy of each pixel next to the pixel
     img = np.repeat(img, n, axis=1)
     #insert a copy of each row underneath the row
@@ -59,6 +58,9 @@ def upsample(img, n):
     return img
 
 def pyramid(img, n=5):
+    """
+    returns an array with n frequency bands of an image (laplacian filter) with diminishing size
+    """
     bands = []
     last_img = img
     for i in range(1,n+1):
@@ -76,21 +78,27 @@ def pyramid(img, n=5):
     return bands
 
 def rebuild_pyramid(bands, s=1):
+    """
+    returns an image constructed from frequency bands (laplacian filter) saved as a pyramid
+    reconstruction is lossy, the parameter s determines the strength of the anti-aliasing
+    """
     current = bands.pop()
     while len(bands) > 0:
         next_band = bands.pop()
         current = skimage.transform.resize(current, next_band.shape)
-
         fft_current = np.add(np.fft.fft2(current), np.fft.fft2(next_band))
         current = np.fft.ifft2(fft_current).real
         current = upsample(current, 2)
         current = skimage.filters.gaussian(current, sigma=s)
-        skio.imshow(current)
-        skio.show()
+
     result = sk.exposure.rescale_intensity(current, in_range=(-1.0,1.0))
     return result
 
-def merge(img1, img2, mask, n):
+def splice(img1, img2, mask, n):
+    """
+    splices two images together by splicing their respective frequency bands
+    the edge is defined by the mask
+    """
     bands1 = stacks(img1, n)
     bands2 = stacks(img2, n)
     merged_bands = []
@@ -102,75 +110,5 @@ def merge(img1, img2, mask, n):
         merged = np.fft.ifft2(merged).real
         merged_bands.append(merged)
 
-    plt.axis("off")
-    fig = plt.figure(1,(len(merged_bands)))
-    k = 1
-    for band in merged_bands:
-        ax = fig.add_subplot(1,len(merged_bands), k)
-        ax.imshow(np.add(band,0.5))
-        ax.axis('off')
-        k += 1
-    plt.show()
     result = rebuild_stacks(merged_bands)
     return result
-
-#img1 = skio.imread("./originals/apple.jpeg")
-#img2 = skio.imread("./originals/orange.jpeg")
-#mask = skio.imread("./masks/apple-orange-mask.jpg")
-#img1 = skio.imread("./originals/puma_adjusted.jpg")
-#img2 = skio.imread("./originals/kletzander.jpg")
-#mask = skio.imread("./masks/pumaeyes.jpg")
-#img1 = skio.imread("./originals/dani.JPG")
-#img2 = skio.imread("./originals/ich_dani.JPG")
-#mask = skio.imread("./masks/dani_ich.JPG")
-#img1 = skio.imread("./originals/lion_adjusted.jpg")
-#img2 = skio.imread("./originals/dandelion.jpg")
-#mask = skio.imread("./masks/dandelion.jpg")
-#img1 = skio.imread("./originals/faces_hand.jpg")
-#img2 = skio.imread("./originals/hand.jpg")
-#mask = skio.imread("./masks/hand2.jpg")
-img1 = skio.imread("./originals/earth.jpg")
-img2 = skio.imread("./originals/moon_big.jpg")
-mask = skio.imread("./masks/mearth5.jpg")
-#img1 = skio.imread("./originals/penguins_adjusted2.jpg")
-#img2 = skio.imread("./originals/beach_adjusted.jpg")
-#mask = skio.imread("./masks/beach2.jpg")
-img1 = sk.img_as_float(img1)
-img2 = sk.img_as_float(img2)
-mask = sk.img_as_float(mask)
-
-#img1 = skimage.color.rgb2gray(img1)
-#img2 = skimage.color.rgb2gray(img2)
-#mask = skimage.color.rgb2gray(mask)
-
-#merged = merge(img1, img2, mask, 6)
-#skio.imshow(merged)
-#skio.show()
-
-#loop through all the files given as arguments
-for name in sys.argv[1:]:
-    img = skio.imread(name)
-    img = sk.img_as_float(img)
-
-    bands = pyramid(img, 6)
-    plt.axis("off")
-    fig = plt.figure(1,(len(bands)))
-    k = 1
-    for band in bands:
-        print(band.shape)
-        ax = fig.add_subplot(1,len(bands), k)
-        ax.imshow(np.add(band,0.5))
-        ax.axis('off')
-        k += 1
-    plt.show()
-
-    image = rebuild_pyramid(bands)
-    skio.imshow(image)
-    skio.show()
-    skio.imsave("./tiggen.jpg", image)
-
-
-    #uncomment to save image
-#name = os.path.basename(mask)
-#name = os.path.splitext(name)[0]
-#skio.imsave("./spliced/mearth.jpg", merged)
