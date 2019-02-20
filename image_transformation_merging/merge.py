@@ -1,9 +1,11 @@
 import sys
+import random
 import numpy as np
 import skimage.io as skio
 import skimage as sk
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
+from matplotlib import path
 
 #if len(sys.argv) != 5:
 #    print("please give the images you want to combine. The first image will be used for the low frequencies, the second for the high frequencies (low_frequencies high_frequencies)")
@@ -53,6 +55,8 @@ def to_homog(point):
         point = np.append(point, 1.0)
     return point
 
+def from_homog(point):
+    return [point[0]/point[2], point[1]/point[2]]
 
 def calc_affine_transform(triangle1, triangle2):
     dependents = []
@@ -83,10 +87,57 @@ def calc_transform_all(triangles1, triangles2):
         transformations.append(transformation)
     return np.array(transformations)
 
+def calc_origin_pixel_color(original_img, pixel_coords, transform_origtoavg):
+    inverse_transform = np.linalg.inv(transform_origtoavg)
+    original_px = from_homog(np.matmul(inverse_transform, to_homog(pixel_coords)))
+    px_color = original_img[int(np.round(original_px[1])), int(np.round(original_px[0])), :]
+    return px_color
+
+
 def morph(img1, img2, img1_pts, img2_pts, tri, warp_frac, dissolve_frac):
+    interpolated = interpolate_pointclouds(img1_pts, img2_pts, warp_frac)
+    triangulated = Delaunay(interpolated)
+
+##plt.triplot(interpolated[:,0], interpolated[:,1], triangulated.simplices)
+##plt.plot(interpolated[:,0], interpolated[:,1], 'o')
+#    plt.triplot(points1[:,0], points1[:,1], triangulated.simplices)
+#    plt.plot(points1[:,0], points1[:,1], 'o')
+#    plt.imshow(im1)
+#    plt.axis('equal')
+##plt.gca().invert_yaxis()
+#    plt.show()
+
+    triangles_avg = create_triangles(interpolated, triangulated.simplices)
+    triangles_img1 = create_triangles(img1_pts, triangulated.simplices)
+    triangles_img2 = create_triangles(img2_pts, triangulated.simplices)
+
+    transformations_1toavg = calc_transform_all(triangles_img1, triangles_avg)
+    transformations_2toavg = calc_transform_all(triangles_img2, triangles_avg)
+    print(transformations_1toavg.shape)
+
     intermed_img = np.zeros_like(img1)
-    for pixel in intermed_img[:,:]:
-        print(pixel)
+    last_triangle_index = 0 #save last triangle because the next pixel is likely also in it
+    transformation_1toavg = transformations_1toavg[last_triangle_index]
+    transformation_2toavg = transformations_2toavg[last_triangle_index]
+
+    colors = [[255,0,0], [0,255,0], [0,0,255], [255,255,0], [0,255,255], [255,0,255]]
+    color = [255,0,0]
+    for y in range(intermed_img.shape[1]):
+        for x in range(intermed_img.shape[0]):
+            pixel = intermed_img[y,x,:]
+            if not (path.Path(triangles_avg[last_triangle_index]).contains_point([x,y])):
+                for t in range(len(triangles_avg)):
+                    triangle_path = path.Path(triangles_avg[t])
+                    if triangle_path.contains_point([x,y]):
+                        color = colors[t%len(colors)]
+                        transformation_1toavg = transformations_1toavg[t]
+                        transformation_2toavg = transformations_2toavg[t]
+                        last_triangle_index = t
+            intermed_img[y,x,:] = color
+            intermed_img[y,x,:] = calc_origin_pixel_color(img1, [x,y], transformation_1toavg)
+
+    skio.imshow(intermed_img)
+    skio.show()
 
 
 im1 = skio.imread("./faces/19-Rosalie.jpg")
@@ -102,17 +153,6 @@ im2 = sk.img_as_float(im2)
 
 interpolated = interpolate_pointclouds(points1, points2, 0.5)
 triangulated = Delaunay(interpolated)
-
-#plt.triplot(interpolated[:,0], interpolated[:,1], triangulated.simplices)
-#plt.plot(interpolated[:,0], interpolated[:,1], 'o')
-#plt.axis('equal')
-#plt.gca().invert_yaxis()
-#plt.show()
-
-triangles_avg = create_triangles(interpolated, triangulated.simplices)
-triangles_im1 = create_triangles(points1, triangulated.simplices)
-transformations = calc_transform_all(triangles_im1, triangles_avg)
-print(transformations.shape)
 
 morphed = morph(im1, im2, points1, points2, triangulated, 0.5, 0.5)
 
