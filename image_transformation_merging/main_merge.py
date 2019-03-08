@@ -31,19 +31,19 @@ im2 = sk.img_as_float(im2)
 
 triangles = merge.calculate_triangles(points1, points2)
 
-#create a morphed hybrid image
-hybrid_low, hybrid_high = hybrid_image_separate(im1, im2, 4, 10, 0.8)
-morphed = merge.morph(hybrid_low, hybrid_high, points1, points2, triangles, 0.5, -1)
-skio.imshow(morphed)
-skio.show()
-morphed = sk.exposure.rescale_intensity(morphed, in_range=(-1.0,1.0))
-#skio.imsave("./hybrid_morphed.jpg", morphed)
+##create a morphed hybrid image
+#hybrid_low, hybrid_high = hybrid_image_separate(im1, im2, 4, 10, 0.8)
+#morphed = merge.morph(hybrid_low, hybrid_high, points1, points2, triangles, 0.5, -1)
+#skio.imshow(morphed)
+#skio.show()
+#morphed = sk.exposure.rescale_intensity(morphed, in_range=(-1.0,1.0))
+##skio.imsave("./hybrid_morphed.jpg", morphed)
 
-#create a 50/50 morph of two images
-morphed = merge.morph(im1, im2, points1, points2, triangles, 0.5, 0.5)
+#create a 50/50 morph of two images (warp, diss)
+morphed = merge.morph(im1, im2, points1, points2, triangles, 0.7, 0.3)
 skio.imshow(morphed)
 skio.show()
-#skio.imsave("./morphed_halfway.jpg", morphed)
+skio.imsave("./femininisation_0703.jpg", morphed)
 
 #uncomment to create a morph sequence, n specifies the number of images in the sequence
 #n = 60

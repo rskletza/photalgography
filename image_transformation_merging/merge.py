@@ -17,7 +17,12 @@ def parse_pointfile(txt):
     #if contains two lines and commas, then is dlib point file
     if "," in txt:
         stringlist = txt.split("\n")
-        #discard rectangle (index 0), not needed here
+        rectangle = stringlist[0].split(",")
+        pointlist.append([float(rectangle[0]), float(rectangle[1])])
+        pointlist.append([float(rectangle[2]), float(rectangle[3])])
+        pointlist.append([float(rectangle[0]),float(rectangle[3])])
+        pointlist.append([float(rectangle[2]), float(rectangle[1])])
+
         stringlist = stringlist[1].split(",")
         for i in range(0, len(stringlist)-1, 2):
             if stringlist[i] and stringlist[i+1]:
@@ -30,6 +35,12 @@ def parse_pointfile(txt):
                 strings = string.split(" ")
                 pointlist.append([float(strings[0]), float(strings[1])])
     return np.array(pointlist)
+
+def write_pointfile(points, filename):
+    file = open(filename, "w")
+    for point in points:
+        file.write(str(int(np.round(point[0]))) + " " + str(int(np.round(point[1]))) + "\n")
+    file.close()
 
 def add_image_edge_points(pointcloud, img):
     """
@@ -66,6 +77,24 @@ def interpolate_pointclouds(cloudA, cloudB, factor):
         interpolated.append(interpolate_points(pointA, pointB, factor))
     return np.array(interpolated)
 
+def average_pointclouds(cloudlist):
+    """
+    calculates the average of a set of pointclouds
+    returns the average pointcloud
+    """
+    cloudlength = len(cloudlist[0])
+    listlength = len(cloudlist)
+    sumcloud = np.zeros(cloudlist[0].shape)
+
+    for cloud in cloudlist: 
+        if (len(cloud) != cloudlength):
+            raise ValueError('point clouds must be the same length, those given are: ', len(listlength), len(cloud))
+        sumcloud = np.add(sumcloud, cloud)
+
+    sumcloud = np.divide(sumcloud, listlength)
+
+    return np.array(sumcloud)
+
 def reshape_point(point):
     """
     reshapes point to a form that will enable setting up a linear equation
@@ -89,6 +118,33 @@ def from_homog(point):
     """
     return [point[0]/point[2], point[1]/point[2]]
 
+def correct_to_triangle(triangle):
+    """
+    given three linearly non-independent points, shifts one minimally to make them independent
+    """
+
+    diff01 = triangle[0]-triangle[1].astype(int)
+    bool01 = (diff01==0)
+    diff02 = triangle[0]-triangle[2].astype(int)
+    bool02 = (diff02==0)
+    diff12 = triangle[1]-triangle[2].astype(int)
+    bool12 = (diff12==0)
+
+#    while (bool01.any() and bool02.any() and bool12.any()):
+    if bool01.any():
+        triangle[0][0] += int(bool01[0])
+        triangle[0][1] += int(bool01[1])
+        diff01 = triangle[0]-triangle[1].astype(int)
+    if bool02.any():
+        triangle[0][0] += int(bool02[0])
+        triangle[0][1] += int(bool02[1])
+        diff02 = triangle[0]-triangle[2].astype(int)
+    if bool12.any():
+        triangle[1][0] += int(bool12[0])
+        triangle[1][1] += int(bool12[1])
+        diff12 = triangle[1]-triangle[2].astype(int)
+    return triangle
+
 def calc_affine_transform(triangle1, triangle2):
     dependents = []
     for point in triangle1:
@@ -96,7 +152,20 @@ def calc_affine_transform(triangle1, triangle2):
     dependents = np.array(dependents)
     triangle2 = np.array(triangle2)
 
-    transform = np.linalg.solve(dependents, np.ndarray.flatten(triangle2))
+    try:
+        transform = np.linalg.solve(dependents, np.ndarray.flatten(triangle2))
+    except np.linalg.LinAlgError:
+        triangle1 = correct_to_triangle(triangle1)
+        triangle2 = correct_to_triangle(triangle2)
+
+        dependents = []
+        for point in triangle1:
+            dependents += reshape_point(point)
+        dependents = np.array(dependents)
+
+        transform = np.linalg.solve(dependents, np.ndarray.flatten(triangle2))
+        #transform = np.linalg.lstsq(dependents, np.ndarray.flatten(triangle2))
+        
     transform = np.append(transform, [0.0, 0.0, 1.0])
     transform = np.reshape(transform, (3,3))
 
@@ -108,7 +177,10 @@ def calc_transform_all(triangles1, triangles2):
     returns a list of the transformations
     """
     transformations = []
+    i = 0
     for tri1, tri2 in zip(triangles1, triangles2):
+#        print(i)
+#        i += 1
         transformation = calc_affine_transform(tri1, tri2)
         transformations.append(transformation)
     return np.array(transformations)
@@ -173,7 +245,7 @@ def morph(img1, img2, img1_pts, img2_pts, triangles, warp_frac, dissolve_frac):
 
 #    plt.triplot(interpolated[:,0], interpolated[:,1], triangles)
 #    plt.plot(interpolated[:,0], interpolated[:,1], 'o')
-#    plt.imshow(im1)
+#    plt.imshow(img1*0.5 + img2*0.5)
 #    plt.axis('equal')
 #    plt.show()
 
