@@ -122,13 +122,12 @@ def correct_to_triangle(triangle):
     """
     given three linearly non-independent points, shifts one minimally to make them independent
     """
-
-    diff01 = triangle[0]-triangle[1].astype(int)
-    bool01 = (diff01==0)
-    diff02 = triangle[0]-triangle[2].astype(int)
-    bool02 = (diff02==0)
-    diff12 = triangle[1]-triangle[2].astype(int)
-    bool12 = (diff12==0)
+    diff01 = triangle[0]-triangle[1]
+    bool01 = np.isclose(diff01, 0, 0.01)
+    diff02 = triangle[0]-triangle[2]
+    bool02 = np.isclose(diff02, 0, 0.01)
+    diff12 = triangle[1]-triangle[2]
+    bool12 = np.isclose(diff12, 0, 0.01)
 
 #    while (bool01.any() and bool02.any() and bool12.any()):
     if bool01.any():
@@ -288,5 +287,9 @@ def morph(img1, img2, img1_pts, img2_pts, triangles, warp_frac, dissolve_frac):
                 intermed_img[y,x,:] = orig_px_1 + orig_px_2
             else:
                 intermed_img[y,x,:] = (1-dissolve_frac) * orig_px_1 + dissolve_frac * orig_px_2
+                #uncomment for greenscreen effect (pixels with value 0,255,0 are ignored
+                if(np.isclose(np.array(orig_px_1), np.array([0,1,0]), atol=0.15)).all():
+                    intermed_img[y,x,:] = orig_px_2
+                elif(np.isclose(np.array(orig_px_2), np.array([0,1,0]), atol=0.15)).all():
+                    intermed_img[y,x,:] = orig_px_1
     return intermed_img
-

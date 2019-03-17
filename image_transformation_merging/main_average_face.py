@@ -31,7 +31,6 @@ else:
 
     im1 = skio.imread(imgnames[0])
     im1 = sk.img_as_float(im1)
-#    im2 = skio.imread(sys.argv[3])
 
     #calculate average shape for all input images
     interpolated = merge.parse_pointfile(pointnames[0])
@@ -71,11 +70,10 @@ else:
 #        plt.show()
         try:
             reshaped = merge.morph(img, img, pts, interpolated, triangles, 1, 0) #second parameter doesn't matter, as we are only taking pixels from the original image
-        except:
+        except np.linalg.LinAlgError:
             print("FAILED")
             continue
         reshaped_faces.append(reshaped)
-        skio.imsave("./reshaped/"+ imgname, reshaped)
 
     average_face = np.zeros(reshaped_faces[0].shape)
     for reshaped in reshaped_faces:
@@ -85,4 +83,4 @@ else:
     skio.imshow(average_face)
     skio.show()
 
-    skio.imsave("./average_out.jpg", average_face)
+#    skio.imsave("./average_out.jpg", average_face)
