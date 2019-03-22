@@ -25,9 +25,7 @@ def parse_pointfile(txt):
             pointlist.append([float(strings[0]), float(strings[1])])
     return np.array(pointlist)
 
-#def createPanorama(target_img, trans_img, target_pts, trans_pts):
 def createPanorama(target_set, trans_set, flag):
-    target_pts, dangling_target_pts, trans_pts, dangling_trans_pts = [0,0,0,0]
     if flag == 0: #add to left of base
         target_pts = target_set[0]
         dangling_target_pts = target_set[2]
@@ -76,8 +74,6 @@ def createMatrixRows(pt, targetpt):
     return [row1, row2]
 
 def align(target_set, trans_set, flag):
-#def align(target_img, trans_img, target_pt, trans_pts):
-    target_pts, dangling_target_pts, trans_pts, dangling_trans_pts = [0,0,0,0]
     if flag == 0: #transl left of base
         print("image is to the left of the base")
         target_pts = target_set[0]
@@ -93,6 +89,8 @@ def align(target_set, trans_set, flag):
 
     target_img = target_set[1]
     trans_img = trans_set[1]
+
+    target_corners = np.array([np.array([0,0]), np.array([target_img.shape[1], target_img.shape[0]])])
 
     transl = np.subtract(target_pts[0],trans_pts[0])
     trans_corners = [[0,0] + transl, [trans_img.shape[1], 0] + transl, [0, trans_img.shape[0]] + transl, [trans_img.shape[1], trans_img.shape[0]] + transl]
@@ -113,6 +111,7 @@ def align(target_set, trans_set, flag):
         print(1)
         added_x_left = np.zeros((out_img.shape[0], int(np.ceil(np.abs(trans_min_xy[0]))), 3))
         out_img = np.concatenate((added_x_left, out_img), axis=1)
+        target_corners += [added_x_left.shape[1], 0]
         new_target_pts += [added_x_left.shape[1], 0]
         new_dangling_target_pts = addToDangling(new_dangling_target_pts, [added_x_left.shape[1], 0])
     if(trans_max_xy[0] > target_img.shape[1]):
@@ -123,6 +122,7 @@ def align(target_set, trans_set, flag):
         print(3)
         added_y_top = np.zeros((int(np.ceil(np.abs(trans_min_xy[1]))), out_img.shape[1], 3))
         out_img = np.concatenate((added_y_top, out_img), axis = 0)
+        target_corners += [0, added_y_top.shape[0]]
         new_target_pts += [0, added_y_top.shape[0]]
         new_dangling_target_pts = addToDangling(new_dangling_target_pts, [0, added_y_top.shape[0]])
     if(trans_max_xy[1] > target_img.shape[0]):
@@ -155,7 +155,9 @@ def align(target_set, trans_set, flag):
 #    plt.axis('equal')
 #    plt.show()
 
-    out_img = np.add(0.5 * new_trans_img, 0.5 * out_img)
+    #delete overlap of target from trans
+    new_trans_img[target_corners[0][1] : target_corners[1][1], target_corners[0][0] : target_corners[1][0], : ] = np.zeros((target_img.shape))
+    out_img = np.add(new_trans_img, out_img)
 
     if(flag == 0):
         return(new_dangling_trans_pts, out_img, new_dangling_target_pts)
@@ -168,8 +170,6 @@ def addToDangling(dangling, vector):
     else:
         return np.array([])
 
-
-#def applyHomography(img, H, corresp=[]):
 def applyHomography(H, img_set):
     corresp_left = img_set[0]
     img = img_set[1]

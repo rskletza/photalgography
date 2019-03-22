@@ -59,10 +59,10 @@ else:
         other_img = sk.img_as_float(other_img)
         other_r_points = panorama.parse_pointfile(img_sets[i][2])
         other_set = (other_l_points, other_img, other_r_points)
-        print("other_set points (l, r): " + str(other_l_points) + str(other_r_points))
+        #print("other_set points (l, r): " + str(other_l_points) + str(other_r_points))
 
         base_set = panorama.createPanorama(base_set, other_set, flag)
-        print("new base image: (left_points, shape, right_points): " + str(base_set[0]) + str(base_set[1].shape) + str(base_set[2]))
+        #print("new base image: (left_points, shape, right_points): " + str(base_set[0]) + str(base_set[1].shape) + str(base_set[2]))
         count += 1
 
 #        skio.imsave("./intermed" + str(count) + ".jpg", base_set[1])
