@@ -7,6 +7,12 @@ from numpy import linalg
 import matplotlib.pyplot as plt
 from matplotlib import path
 
+class PanoSet:
+    def __init__(self, img, left_pts, right_pts):
+        self.img = img
+        self.left_pts = left_pts
+        self.right_pts = right_pts
+
 def parse_pointfile(txt):
     """
     takes a filename and parses points from it. 
@@ -27,27 +33,36 @@ def parse_pointfile(txt):
 
 def createPanorama(target_set, trans_set, flag):
     if flag == 0: #add to left of base
-        target_pts = target_set[0]
-        dangling_target_pts = target_set[2]
-        trans_pts = trans_set[2]
-        dangling_trans_pts = trans_set[0]
+        target_pts = target_set.left_pts
+        dangling_target_pts = target_set.right_pts
+        trans_pts = trans_set.right_pts
+        dangling_trans_pts = trans_set.left_pts
     else: #add to right of base
-        target_pts = target_set[2]
-        dangling_target_pts = target_set[0]
-        trans_pts = trans_set[0]
-        dangling_trans_pts = trans_set[2]
+        target_pts = target_set.right_pts
+        dangling_target_pts = target_set.left_pts
+        trans_pts = trans_set.left_pts
+        dangling_trans_pts = trans_set.right_pts
 
-    target_img = target_set[1]
-    trans_img = trans_set[1]
+    target_img = target_set.img
+    trans_img = trans_set.img
+
+    plt.plot(trans_pts[:,0], trans_pts[:,1], 'o')
+    plt.imshow(trans_img)
+    plt.axis('equal')
+    plt.show()
     
-    H = calcHomography(target_img, trans_img, target_pts, trans_pts)
+    H = calcHomography(target_pts, trans_pts)
 
-    intermed_set = applyHomography(H, trans_set)
+    intermed_set = applyHomographyToImg(H, trans_set)
+#    np.save("left_pts", intermed_set.left_pts)
+#    np.save("right_pts", intermed_set.right_pts)
+#    np.save("img", intermed_set.img)
+#    intermed_set = PanoSet(np.load("img.npy"), np.load("left_pts.npy"), np.load("right_pts.npy"))
 
     out_set = align(target_set, intermed_set, flag)        
     return out_set
 
-def calcHomography(target_img, trans_img, target_pts, trans_pts):
+def calcHomography(target_pts, trans_pts):
     """
     calculates the homography that will transform trans_img to the same perspective as ref_img. trans_pts and ref_pts are both arrays of points [x,y] order
     """
@@ -76,20 +91,21 @@ def createMatrixRows(pt, targetpt):
 def align(target_set, trans_set, flag):
     if flag == 0: #transl left of base
         print("image is to the left of the base")
-        target_pts = target_set[0]
-        dangling_target_pts = target_set[2]
-        trans_pts = trans_set[2]
-        dangling_trans_pts = trans_set[0]
+        target_pts = target_set.left_pts
+        dangling_target_pts = target_set.right_pts
+        trans_pts = trans_set.right_pts
+        dangling_trans_pts = trans_set.left_pts
     else: #transl right of base
         print("image is to the right of the base")
-        target_pts = target_set[2]
-        dangling_target_pts = target_set[0]
-        trans_pts = trans_set[0]
-        dangling_trans_pts = trans_set[2]
+        target_pts = target_set.right_pts
+        dangling_target_pts = target_set.left_pts
+        trans_pts = trans_set.left_pts
+        dangling_trans_pts = trans_set.right_pts
 
-    target_img = target_set[1]
-    trans_img = trans_set[1]
+    target_img = target_set.img
+    trans_img = trans_set.img
 
+    #target_corners = target_set.corners
     target_corners = np.array([np.array([0,0]), np.array([target_img.shape[1], target_img.shape[0]])])
 
     transl = np.subtract(target_pts[0],trans_pts[0])
@@ -130,11 +146,15 @@ def align(target_set, trans_set, flag):
         added_y_bottom = np.zeros((int(np.ceil(trans_max_xy[1]))-target_img.shape[0], out_img.shape[1], 3))
         out_img = np.concatenate((out_img, added_y_bottom), axis = 0)
 
-    #plt.plot(new_target_pts[:,0], new_target_pts[:,1], 'o')
-    #plt.plot(new_dangling_target_pts[:,0], new_dangling_target_pts[:,1], 'o')
-    #plt.imshow(out_img)
-    #plt.axis('equal')
-    #plt.show()
+    print("out_img")
+    skio.imshow(out_img)
+    skio.show()
+
+    plt.plot(new_target_pts[:,0], new_target_pts[:,1], 'o')
+    plt.plot(new_dangling_target_pts[:,0], new_dangling_target_pts[:,1], 'o')
+    plt.imshow(out_img)
+    plt.axis('equal')
+    plt.show()
 
     diff_x = np.zeros((trans_img.shape[0], out_img.shape[1] - trans_img.shape[1], 3))
     new_trans_img = np.concatenate((trans_img, diff_x), axis = 1)
@@ -149,20 +169,27 @@ def align(target_set, trans_set, flag):
     translation = skimage.transform.EuclideanTransform(translation=final_transl)
     new_trans_img = skimage.transform.warp(new_trans_img, translation, mode="wrap")
 
-#    print("plot new trans points with new trans img")
-#    plt.plot(new_trans_pts[:,0], new_trans_pts[:,1], 'o')
-#    plt.imshow(new_trans_img)
-#    plt.axis('equal')
-#    plt.show()
+    print("plot new trans points with new trans img")
+    plt.plot(new_trans_pts[:,0], new_trans_pts[:,1], 'o')
+    plt.imshow(new_trans_img)
+    plt.axis('equal')
+    plt.show()
 
-    #delete overlap of target from trans
-    new_trans_img[target_corners[0][1] : target_corners[1][1], target_corners[0][0] : target_corners[1][0], : ] = np.zeros((target_img.shape))
-    out_img = np.add(new_trans_img, out_img)
+    #create a mask for trans img (white for the image, black everywhere else)
+    trans_img_mask = (new_trans_img[:,:,:] != (0.0,0.0,0.0)).astype(float)
+    out_img_mask = (out_img[:,:,:] != (0.0,0.0,0.0)).astype(float)
+    overlapping = np.multiply(trans_img_mask, out_img_mask)
+    just_trans = np.subtract(trans_img_mask, overlapping)
+    just_out = np.subtract(out_img_mask, overlapping)
+
+#    print(trans_img_mask)
+#    out_img = just_trans * new_trans_img + 0.5 * new_trans_img 
+    out_img = np.multiply(just_trans, new_trans_img) + np.multiply(overlapping, np.add(new_trans_img * 0.5, out_img * 0.5)) + np.multiply(just_out, out_img)
 
     if(flag == 0):
-        return(new_dangling_trans_pts, out_img, new_dangling_target_pts)
+        return PanoSet(out_img, new_dangling_trans_pts, new_dangling_target_pts)
     else:
-        return(new_dangling_target_pts, out_img, new_dangling_trans_pts)
+        return PanoSet(out_img, new_dangling_target_pts, new_dangling_trans_pts)
 
 def addToDangling(dangling, vector):
     if len(dangling) != 0:
@@ -170,16 +197,24 @@ def addToDangling(dangling, vector):
     else:
         return np.array([])
 
-def applyHomography(H, img_set):
-    corresp_left = img_set[0]
-    img = img_set[1]
-    corresp_right = img_set[2]
-
-    points = [[0,0], [img.shape[1], 0], [0, img.shape[0]], [img.shape[1], img.shape[0]]]
+def applyHomography(H, points):
     trans_pts = []
     for pt in points:
         trans_pt = np.matmul(H, to_homog(pt))
         trans_pts.append(np.array(np.round(from_homog(trans_pt))))
+    return np.array(trans_pts)
+
+def applyHomographyToImg(H, img_set):
+    corresp_left = img_set.left_pts
+    img = img_set.img
+    corresp_right = img_set.right_pts
+    points = [[0,0], [img.shape[1], 0], [0, img.shape[0]], [img.shape[1], img.shape[0]]]
+    trans_pts = applyHomography(H, points)
+#    trans_pts = []
+#    for pt in points:
+#        trans_pt = np.matmul(H, to_homog(pt))
+#        trans_pts.append(np.array(np.round(from_homog(trans_pt))))
+#    print(trans_pts)
 
     min_xy = np.amin(trans_pts, axis=0)
     max_xy = np.amax(trans_pts, axis=0)
@@ -202,34 +237,7 @@ def applyHomography(H, img_set):
         for x in range(out_img.shape[1]):
             out_img[y,x,:] = calc_origin_pixel_color(img, [x+origin[0],y+origin[1]], H)
 
-    return (np.array(new_corresp_left), out_img, np.array(new_corresp_right))
-#    trans_corners = np.subtract(trans_pts, origin).astype(int)
-#    pts = np.unique(np.concatenate((trans_corners, new_corners), axis=0), axis=0)
-#    triangle_indices = Delaunay(pts).simplices
-#    triangles = create_triangles(pts, triangle_indices)
-#
-#    #create an array with all possible array indices (cartesian product)
-#    img_indices = np.array(np.meshgrid(np.arange(0, out_img.shape[1]), np.arange(0, out_img.shape[0]))).T.reshape(-1,2)
-#    #for each triangle, check if "inside picture"
-#    for t in range(len(triangles)):
-#        center = np.divide((np.add(np.add(triangles[t][0], triangles[t][1]), triangles[t][2])), 3.0)
-#        if (np.array(calc_origin_pixel_color(img, center, H)).all() == -1):
-#            continue
-#
-#        triangle = path.Path(triangles[t])
-#        bool_contained = np.array(triangle.contains_points(img_indices))
-#        contained = img_indices[bool_contained]
-#        for i in contained:
-#            x, y = (i[0], i[1])
-#            out_img[y,x,:] = calc_origin_pixel_color(img, [x+origin[0],y+origin[1]], H)
-#
-#    plt.triplot(pts[:,0], pts[:,1], triangle_indices)
-#    plt.plot(pts[:,0], pts[:,1], 'o')
-#    plt.imshow(out_img)
-#    plt.axis('equal')
-#    plt.show()
-#    skio.imshow(out_img)
-#    skio.show()
+    return PanoSet(out_img, np.array(new_corresp_left), np.array(new_corresp_right))
 
 def create_triangles(points, indices):
     """
@@ -271,16 +279,9 @@ def calc_origin_pixel_color(original_img, pixel_coords, transform_origtoavg):
 
     #handle edges of image where translated index is out of bounds
     if (orig_x >= original_img.shape[1]) or (orig_x < 0) or (orig_y >= original_img.shape[0]) or (orig_y < 0):
-        px_color = [-1, -1, -1]
+#        px_color = [-1, -1, -1]
+        px_color = [0, 0, 0]
     else:
         px_color = original_img[orig_y, orig_x, :]
-#    if orig_x >= original_img.shape[1]:
-#        orig_x = original_img.shape[1]-1
-#    elif orig_x < 0:
-#        orig_x = 0
-#    if orig_y >= original_img.shape[0]:
-#        orig_y = original_img.shape[0]-1
-#    elif orig_y < 0:
-#        orig_y = 0
 
     return px_color

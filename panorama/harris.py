@@ -50,13 +50,13 @@ def fspecial_gaussian(shape=(3, 3), sigma=0.5):
     return h
 
 
-def harris_detector(imgpath):
+def harris_detector(im, threshold):
 
     #
     # usage: python harris.py 'image.png'
     #
+#    threshold = 1e-4
 
-    im = color.rgb2gray(io.imread(str(imgpath)))
     g1 = fspecial_gaussian([9, 9], 1)  # Gaussian with sigma_d
     g2 = fspecial_gaussian([11, 11], 1.5)  # Gaussian with sigma_i
 
@@ -73,15 +73,16 @@ def harris_detector(imgpath):
     R = np.divide(np.multiply(Ix2, Iy2) - np.multiply(IxIy, IxIy),(Ix2 + Iy2 + eps))
 
     # don't want corners close to image border
-    R[0:15] = 0  # all columns from the first 15 lines
-    R[-16:] = 0  # all columns from the last 15 lines
-    R[:, 0:15] = 0  # all lines from the first 15 columns
-    R[:, -16:] = 0  # all lines from the last 15 columns
+    R[0:20] = 0  # all columns from the first 15 lines
+    R[-21:] = 0  # all columns from the last 15 lines
+    R[:, 0:20] = 0  # all lines from the first 15 columns
+    R[:, -21:] = 0  # all lines from the last 15 columns
 
     # non-maxima suppression within 3x3 windows
     Rmax = gf(R, np.max, footprint=np.ones((3, 3)))
     Rmax[Rmax != R] = 0  # suppress non-max
     v = Rmax[Rmax != 0]
+    Rmax[Rmax < threshold] = 0
     y, x = np.nonzero(Rmax)
 
 #    # show 'em
@@ -99,4 +100,5 @@ def harris_detector(imgpath):
 
 if __name__ == "__main__":
     imgpath = sys.argv[1]
-    harris_detector(imgpath)
+    img = color.rgb2gray(io.imread(str(imgpath)))
+    harris_detector(img)
