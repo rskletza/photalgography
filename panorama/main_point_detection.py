@@ -13,8 +13,8 @@ if __name__ == "__main__":
     img1 = sk.img_as_float(color.rgb2gray(io.imread(str(imgpath))))
     img2 = sk.img_as_float(color.rgb2gray(io.imread(str(imgpath2))))
     corrs1, corrs2 = point_detection.find_correspondences(img1, img2)
-    np.save("corrs1", corrs1)
-    np.save("corrs2", corrs2)
+#    np.save("corrs1", corrs1)
+#    np.save("corrs2", corrs2)
     x1 = corrs1[:,0]
     y1 = corrs1[:,1]
     x2 = corrs2[:,0]

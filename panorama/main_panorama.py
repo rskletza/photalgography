@@ -59,107 +59,22 @@ else:
         other_img = sk.img_as_float(other_img)
         other_r_points = panorama.parse_pointfile(img_sets[i][2])
         other_set = panorama.PanoSet(other_img, other_l_points, other_r_points)
-        #print("other_set points (l, r): " + str(other_l_points) + str(other_r_points))
 
         base_set = panorama.createPanorama(base_set, other_set, flag)
-        #print("new base image: (left_points, shape, right_points): " + str(base_set[0]) + str(base_set[1].shape) + str(base_set[2]))
         count += 1
 
-#        skio.imsave("./intermed" + str(count) + ".jpg", base_set[1])
         skio.imshow(base_set.img)
         skio.show()
-#        skio.imsave("pano" + str(count) + ".jpg", base_set.img)
+        skio.imsave("pano" + str(count) + ".jpg", base_set.img)
 
 sys.exit()
 
 
-#img_left = skio.imread("./images/1-PartieManuelle/Serie1/IMG_2415.JPG")
-#img_left = sk.img_as_float(img_left)
-#pts_left_lc = panorama.parse_pointfile("./images/1-PartieManuelle/Serie1/pts_serie1/pts1_12.txt")
-#pts_center_lc = panorama.parse_pointfile("./images/1-PartieManuelle/Serie1/pts_serie1/pts2_12.txt")
-#img_center = skio.imread("./images/1-PartieManuelle/Serie1/IMG_2416.JPG")
-#img_center = sk.img_as_float(img_center)
-#pts_center_cr = panorama.parse_pointfile("./images/1-PartieManuelle/Serie1/pts_serie1/pts2_32.txt")
-#img_right = skio.imread("./images/1-PartieManuelle/Serie1/IMG_2417.JPG")
-#img_right = sk.img_as_float(img_right)
-#pts_right_cr = panorama.parse_pointfile("./images/1-PartieManuelle/Serie1/pts_serie1/pts3_32.txt")
-#
-#left_set = ([], img_left, pts_left_lc)
-#center_set = (pts_center_lc, img_center, pts_center_cr)
-#right_set = (pts_right_cr, img_right, [])
-#
-#plt.plot(center_set[2][:,0], center_set[2][:,1], 'o')
-#plt.plot(center_set[0][:,0], center_set[0][:,1], 'o')
-#plt.imshow(center_set[1])
-#plt.axis('equal')
-#plt.show()
-#
-#plt.plot(left_set[2][:,0], left_set[2][:,1], 'o')
-#plt.imshow(left_set[1])
-#plt.axis('equal')
-#plt.show()
-#
-#H = panorama.calcHomography(pts_center_lc, pts_left_lc)
-#intermed_set = panorama.applyHomographyToImg(H, left_set)
-#
-#plt.plot(intermed_set[2][:,0], intermed_set[2][:,1], 'o')
-#plt.imshow(intermed_set[1])
-#plt.axis('equal')
-#plt.show()
-#
-#out_set = panorama.align(center_set, intermed_set, 0)
-#
-#plt.plot(out_set[0][:,0], out_set[0][:,1], 'o')
-#plt.plot(out_set[2][:,0], out_set[2][:,1], 'o')
-#plt.imshow(out_set[1])
-#plt.axis('equal')
-#plt.show()
-#skio.imshow(out_img)
-#skio.show()
-#print(out_pts)
-#skio.imsave("./intermed.jpg", out_img)
-#out_img = skio.imread("./intermed.jpg")
-#out_img = sk.img_as_float(out_img)
-#out_pts = [[1070,  497], [1172,  505], [1258,  550], [ 902,  634], [1145,  740], [1221,  775], [1227,  633], [ 946,  769]] 
-#combined, new_pts = panorama.align(img_center, out_img, pts_center_lc[0], out_pts)
-#skio.imshow(combined)
-#skio.show()
-
-#H = panorama.calcHomography(img_center, img_right, pts_center_cr, pts_right_cr)
-#out_img, out_pts = panorama.applyHomographyToImg(img_right, H, pts_right_cr)
-#print(out_pts)
-#skio.imsave("./intermed_right.jpg", out_img)
-#out_pts = [[343, 507], [270, 546], [273, 657], [366, 696], [427, 748], [514, 483], [373, 479], [639, 707], [ 64, 418], [151, 462]]
-#out_img = skio.imread("./intermed_right.jpg")
-#out_img = sk.img_as_float(out_img)
-#
-#panorama.align(img_center, out_img, pts_center_cr[0], out_pts[0])
-#
-#
-#img_left = skio.imread("./images/0-Rechauffement/pouliot.jpg")
-#img_left = sk.img_as_float(img_left)
-#H1 = [[0.9752, 0.0013, -100.3164], [-0.4886, 1.7240, 24.8480], [-0.0016, 0.0004, 1.0000]]
-##H2 = [[0.1814, 0.7402, 34.3412], [1.0209, 0.1534, 60.3258], [0.0005, 0, 1.0000]]
-#out_set = panorama.applyHomographyToImg(H1, panorama.PanoSet(img_left, [], []))
-#skio.imshow(out_set.img)
-#skio.show()
-#
-#
-#plt.plot(pts_left_lc[:,0], pts_left_lc[:,1], 'o')
-#plt.imshow(img_left)
-#plt.axis('equal')
-#plt.show()
-#
-##start = time.time()
-##out_img, out_pt = panorama.applyHomographyToImg(img_left, H2, pts_left_lc)
-##print(out_pt)
-##end = time.time()
-##print(end - start)
-#
-#plt.plot(out_pt[:,0], out_pt[:,1], 'o')
-#plt.imshow(out_img)
-#plt.axis('equal')
-#plt.show()
-
-
-
+img_left = skio.imread("./images/0-Rechauffement/pouliot.jpg")
+img_left = sk.img_as_float(img_left)
+H1 = [[0.9752, 0.0013, -100.3164], [-0.4886, 1.7240, 24.8480], [-0.0016, 0.0004, 1.0000]]
+H2 = [[0.1814, 0.7402, 34.3412], [1.0209, 0.1534, 60.3258], [0.0005, 0, 1.0000]]
+out_set = panorama.applyHomographyToImg(H2, panorama.PanoSet(img_left, [], []))
+#skio.imsave("H2.jpg", out_set.img)
+skio.imshow(out_set.img)
+skio.show()

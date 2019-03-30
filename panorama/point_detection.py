@@ -2,6 +2,7 @@ import numpy as np
 import numpy.linalg
 import numpy.random
 import matplotlib.pyplot as plt
+from scipy.signal import convolve2d as conv2
 from skimage import io as skio
 from skimage import color, draw, transform
 from sklearn.neighbors import KDTree
@@ -16,9 +17,10 @@ def find_correspondences(img1, img2):
 #    pointlist2 = harris.harris_detector(img2, threshold)
 #    print(pointlist1.shape, pointlist2.shape)
 #
-#    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
+##    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
 #
 ##    filter_n = np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))
+##    filter_n = 1000
 #    filter_n = int(np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))/2)
 #    print(filter_n)
 #    print("filter_points")
@@ -28,74 +30,55 @@ def find_correspondences(img1, img2):
 #    np.save("pointlist1_filter", pointlist1)
 #    np.save("pointlist2_filter", pointlist2)
 
-    pointlist1 = np.load("pointlist1_minfilter.npy")
-    pointlist2 = np.load("pointlist2_minfilter.npy")
+    pointlist1 = np.load("pointlist1_filter.npy")
+    pointlist2 = np.load("pointlist2_filter.npy")
 
 #    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
 
-#    print("extractDescriptors")
-    pointlist1 = extractDescriptors(pointlist1, img1)
-    pointlist2 = extractDescriptors(pointlist2, img2)
-#
-#    print("create descriptor lists")
-#    #descriptors1 = np.array([np.array(p.window).flatten() for p in pointlist1])
-#    #print(descriptors1[0][0])
-#    #print(descriptors1.shape)
-#    #print(type(descriptors1[0]))
-#    #descriptors2 = np.array([np.array(p.window).flatten() for p in pointlist2])
-#
-   #this is ridiculous but the above list comprehension is not recognized as the right shape for the KDTree used in match descriptors
-#    amount = len(pointlist1)
-#    descriptors1 = np.zeros((amount,64))
-#    descriptors2 = np.zeros((amount,64))
-#    i = 0
-#    for p1, p2 in zip(pointlist1, pointlist2):
-#        try:
-#            descriptors1[i] = p1.window.flatten() 
-#            descriptors2[i] = p2.window.flatten()
-#        except ValueError:
-#            #array is empty, this means that the point was at the edge of the image
-#            #no descriptor, so we just leave the "empty" descriptor (an array of zeros)
-#            pass
-#        i += 1
-#
-#    print("match descriptors")
-#    indices1, indices2 = match_descriptors(descriptors1, descriptors2, 0.4)
-#    np.save("indices1", indices1)
-#    np.save("indices2", indices2)
-##
-##    indices1 = np.load("indices1.npy")
-##    indices2 = np.load("indices2.npy")
-#    
-#    coords1 = np.array([pointlist1[i].coords for i in indices1])
-#    coords2 = np.array([pointlist2[i].coords for i in indices2])
-#
+    print("extractDescriptors")
+    pointlist1 = extractDescriptors(pointlist1, img1)#, rotation=True)
+    pointlist2 = extractDescriptors(pointlist2, img2)#, rotation=True)
+
+    print("create descriptor lists")
+    amount = len(pointlist1)
+    descriptors1 = np.zeros((amount,64))
+    descriptors2 = np.zeros((amount,64))
+    i = 0
+    for p1, p2 in zip(pointlist1, pointlist2):
+        try:
+            descriptors1[i] = p1.window.flatten() 
+            descriptors2[i] = p2.window.flatten()
+        except ValueError:
+            #array is empty, this means that the point was at the edge of the image
+            #no descriptor, so we just leave the "empty" descriptor (an array of zeros)
+            pass
+        i += 1
+
+    print("match descriptors")
+    indices1, indices2 = match_descriptors(descriptors1, descriptors2, 0.4)
+    np.save("indices1", indices1)
+    np.save("indices2", indices2)
+
+    indices1 = np.load("indices1.npy")
+    indices2 = np.load("indices2.npy")
+    
+    coords1 = np.array([pointlist1[i].coords for i in indices1])
+    coords2 = np.array([pointlist2[i].coords for i in indices2])
 #    show_correspondences(img1, img2, coords1, coords2)
-##    return(coords1, coords2)
-#
-#    matched_points = np.array([(pointlist1[i1], pointlist2[i2]) for i1, i2 in zip(indices1, indices2)])
-#    correspondences11, correspondences12 = RANSAC_filter(matched_points)
-#    correspondences21, correspondences22 = RANSAC_filter(matched_points)
-#    np.save("correspondences11", correspondences11)
-#    np.save("correspondences12", correspondences12)
-#    np.save("correspondences21", correspondences21)
-#    np.save("correspondences22", correspondences22)
-    correspondences11 = np.load("correspondences11.npy")
-    correspondences12 = np.load("correspondences12.npy")
-    correspondences21 = np.load("correspondences21.npy")
-    correspondences22 = np.load("correspondences22.npy")
 
-    correspondences1 = correspondences11.tolist()
-    correspondences2 = correspondences12.tolist()
-    for corr1, corr2 in zip(correspondences21, correspondences22):
-        if corr1 in correspondences11:
-            #correspondence already exists in list
-            continue
-        else:
-            correspondences1.append(corr1)
-            correspondences2.append(corr2)
+    matched_points = np.array([(pointlist1[i1], pointlist2[i2]) for i1, i2 in zip(indices1, indices2)])
+    correspondences1, correspondences2 = RANSAC_filter(matched_points)
+    correspondences1 = np.array(correspondences1)
+    correspondences2 = np.array(correspondences2)
+    np.save("correspondences1", correspondences1)
+    np.save("correspondences2", correspondences2)
 
-    return(np.array(correspondences1), np.array(correspondences2))
+    correspondences1 = np.load("correspondences1.npy")
+    correspondences2 = np.load("correspondences2.npy")
+
+#    show_correspondences(img1, img2, correspondences1, correspondences2)
+
+    return(correspondences1, correspondences2)
 
 def filter_points(points, amount):
     final_set = []
@@ -123,27 +106,51 @@ def filter_points(points, amount):
 
     return np.array(final_set)
 
-def extractDescriptors(pointlist, img):
+def extractDescriptors(pointlist, img, rotation=False):
+    if(rotation):
+        #repeat procedure from harris detector (could theoretically be passed back from harris detector but oh well
+        #calculates the x and y gradients of the image
+        g1 = harris.fspecial_gaussian([9, 9], 1)  # Gaussian with sigma_d
+        img_blur = conv2(img, g1, 'same')  # blur image with sigma_d
+        Ix = conv2(img_blur, np.array([[-1, 0, 1]]), 'same')  # take x derivative
+        Iy = conv2(img_blur, np.transpose(np.array([[-1, 0, 1]])), 'same')  # take y derivative
     for p in pointlist:
-        window = img[(p.y-20) : (p.y+20), (p.x-20) : (p.x+20)]
+        if(rotation):
+#            if(p.x < 29 or p.x > img.shape[])
+            #calculate gradient orientation
+            theta = np.degrees(np.arctan(np.divide(Iy[p.y, p.x], Ix[p.y, p.x])))
+#            print(theta)
+            #window needs to be big enough so that even if it's rotated by 45 degrees, a 40x40 window can be taken from the center
+            half_edge = 29 #int(np.ceil(40 / np.sqrt(2)))*2=58, close enough
+            window = img[(p.y-half_edge) : (p.y+half_edge), (p.x-half_edge) : (p.x+half_edge)]
+            rotated = transform.rotate(window, theta)
 
-        #window_resized = transform.resize(window, (8,8), anti_aliasing=True)
-        #mean = np.mean(window_resized)
-        #sigma = np.std(window_resized)
-        #window_resized = np.divide(np.subtract(window_resized, mean), sigma)
-        #p.window = window_resized
+            window_rotated = rotated[9:49, 9:49]
+            window_resized = transform.resize(window_rotated, (8,8), anti_aliasing=True)
+        else:
+            window = img[(p.y-20) : (p.y+20), (p.x-20) : (p.x+20)]
+            window_resized = transform.resize(window, (8,8), anti_aliasing=True)
 
-        window_sampled = sample(window, 5)
-        mean = np.mean(window_sampled)
-        sigma = np.std(window_sampled)
-        window_sampled = np.divide(np.subtract(window_sampled, mean), sigma)
-        p.window = window_sampled
+        mean = np.mean(window_resized)
+        sigma = np.std(window_resized)
+        window_resized = np.divide(np.subtract(window_resized, mean), sigma)
+        p.window = window_resized
 
-        #f, axarr = plt.subplots(1,3)
-        #axarr[0].imshow(window)
-        #axarr[1].imshow(window_resized)
-        #axarr[2].imshow(window_sampled)
-        #plt.show()
+        #window_sampled = sample(window, 5)
+        #mean = np.mean(window_sampled)
+        #sigma = np.std(window_sampled)
+        #window_sampled = np.divide(np.subtract(window_sampled, mean), sigma)
+        #p.window = window_sampled
+
+#        f, axarr = plt.subplots(1,6)
+#        axarr[0].imshow(window)
+#        axarr[1].imshow(window_resized)
+#        window_res_rot = transform.rotate(window_resized, theta)
+#        axarr[2].imshow(window_res_rot)
+#        axarr[3].imshow(rotated)
+#        axarr[4].imshow(window_rotated)
+#        axarr[5].imshow(window_rot_res)
+#        plt.show()
 
     return pointlist
 
@@ -162,10 +169,11 @@ def sample(img, n):
     img = np.delete(img, y_indices_to_delete, axis=1)
     return img
 
-def show_correspondences(img1, img2, indices1, indices2, corrs=True):
+def show_correspondences(img1, img2, indices1_orig, indices2_orig, corrs=True):
     img_cat = np.concatenate((img1, img2), axis=1)
     img1_x = img1.shape[1]
-    print(len(indices1))
+    indices1 = np.copy(indices1_orig)
+    indices2 = np.copy(indices2_orig)
     for index in indices2:
         index[0] += img1_x
 
@@ -222,26 +230,26 @@ def match_descriptors(descriptors1, descriptors2, threshold):
 def RANSAC_filter(matched_points):
     coords1 = np.array([t[0].coords for t in matched_points])
     coords2 = np.array([t[1].coords for t in matched_points])
-    print(coords1.shape, coords2.shape)
 
     best = {"vote":0, "matched_points":[]}
-    while best["vote"] < 4:
+    while best["vote"] < 10:
         for i in range(10000):
-#        point_ind = [np.random.randint(0, len(matched_points)) for i in range(4)]
+            #select 4 random indices and get the points at these indices
             point_ind = random.sample(range(0, len(matched_points)), 4)
             selected1 = np.array([coords1[i] for i in point_ind])
             selected2 = np.array([coords2[i] for i in point_ind])
 
-            H = panorama.calcHomography(selected1, selected2)
+#            H = panorama.calcHomography(selected1, selected2)
+            H = panorama.calcHomography(selected2, selected1)
             trans_coords = panorama.applyHomography(H, coords1)
 
-            ssd = np.power(np.subtract(trans_coords, coords2), 2)
-#        print("ssd: " + str(ssd))
-#        print(np.min(ssd), np.max(ssd), np.mean(ssd), np.median(ssd))
-            filtered = (ssd < 20)
-            filtered = np.array([b[0] and b[1] for b in filtered])
+#            ssd = np.power(np.subtract(trans_coords, coords2), 2)
+#            filtered = (ssd < 20)
+#            filtered = np.array([b[0] and b[1] for b in filtered])
+            ssd = np.array([np.sqrt(np.power(t[0]-c[0], 2) + np.power(t[1] - c[1], 2)) for t, c in zip(trans_coords, coords2)])
+            filtered = (ssd < 4)
+
             count = np.count_nonzero(filtered)
-#        print("vote count: " + str(count))
             if best["vote"] < count:
                 best["vote"] = count
                 best["matched_indices"] = filtered
