@@ -218,6 +218,7 @@ def align(target_set, trans_set, flag):
 
 #    out_img = np.multiply(just_trans, new_trans_img) + np.multiply(overlapping, np.add(new_trans_img * 0.5, out_img * 0.5)) + np.multiply(just_out, out_img)
 #    out_img = np.multiply(just_trans, new_trans_img) + np.multiply(overlapping, out_img) + np.multiply(just_out, out_img)
+#    out_img = np.multiply(just_trans, new_trans_img) + np.multiply(overlapping, new_trans_img) + np.multiply(just_out, out_img)
 
     splice_mask = np.zeros(out_img.shape)
     approx_middle = int(np.mean(new_trans_pts, axis=0)[0]) #np.add(just_out, overlapping)

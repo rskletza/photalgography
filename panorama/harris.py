@@ -73,14 +73,14 @@ def harris_detector(im, threshold):
     R = np.divide(np.multiply(Ix2, Iy2) - np.multiply(IxIy, IxIy),(Ix2 + Iy2 + eps))
 
     # don't want corners close to image border
-    R[0:20] = 0  # all columns from the first 15 lines
-    R[-21:] = 0  # all columns from the last 15 lines
-    R[:, 0:20] = 0  # all lines from the first 15 columns
-    R[:, -21:] = 0  # all lines from the last 15 columns
-#    R[0:29] = 0  # all columns from the first 15 lines
-#    R[-30:] = 0  # all columns from the last 15 lines
-#    R[:, 0:29] = 0  # all lines from the first 15 columns
-#    R[:, -30:] = 0  # all lines from the last 15 columns
+#    R[0:20] = 0  # all columns from the first 15 lines
+#    R[-21:] = 0  # all columns from the last 15 lines
+#    R[:, 0:20] = 0  # all lines from the first 15 columns
+#    R[:, -21:] = 0  # all lines from the last 15 columns
+    R[0:29] = 0  # all columns from the first 15 lines
+    R[-30:] = 0  # all columns from the last 15 lines
+    R[:, 0:29] = 0  # all lines from the first 15 columns
+    R[:, -30:] = 0  # all lines from the last 15 columns
 
     # non-maxima suppression within 3x3 windows
     Rmax = gf(R, np.max, footprint=np.ones((3, 3)))

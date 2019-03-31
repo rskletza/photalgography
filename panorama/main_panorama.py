@@ -70,11 +70,19 @@ else:
 sys.exit()
 
 
-img_left = skio.imread("./images/0-Rechauffement/pouliot.jpg")
+#img_left = skio.imread("./images/0-Rechauffement/pouliot.jpg")
+#img_left = sk.img_as_float(img_left)
+#H1 = [[0.9752, 0.0013, -100.3164], [-0.4886, 1.7240, 24.8480], [-0.0016, 0.0004, 1.0000]]
+#H2 = [[0.1814, 0.7402, 34.3412], [1.0209, 0.1534, 60.3258], [0.0005, 0, 1.0000]]
+#out_set = panorama.applyHomographyToImg(H2, panorama.PanoSet(img_left, [], []))
+##skio.imsave("H2.jpg", out_set.img)
+#skio.imshow(out_set.img)
+#skio.show()
+
+pts1 = panorama.parse_pointfile("./my_imgs/pts0_01.txt")
+pts2 = panorama.parse_pointfile("./my_imgs/pts1_01.txt")
+H = panorama.calcHomography(pts2, pts1)
+print(H)
+img_left = skio.imread("./my_imgs/na.jpg")
 img_left = sk.img_as_float(img_left)
-H1 = [[0.9752, 0.0013, -100.3164], [-0.4886, 1.7240, 24.8480], [-0.0016, 0.0004, 1.0000]]
-H2 = [[0.1814, 0.7402, 34.3412], [1.0209, 0.1534, 60.3258], [0.0005, 0, 1.0000]]
-out_set = panorama.applyHomographyToImg(H2, panorama.PanoSet(img_left, [], []))
-#skio.imsave("H2.jpg", out_set.img)
-skio.imshow(out_set.img)
-skio.show()
+out_set = panorama.applyHomographyToImg(H, panorama.PanoSet(img_left, [], []))

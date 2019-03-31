@@ -12,26 +12,28 @@ import harris
 import panorama
 
 def find_correspondences(img1, img2):
-#    threshold = 1e-4
-#    pointlist1 = harris.harris_detector(img1, threshold) 
-#    pointlist2 = harris.harris_detector(img2, threshold)
-#    print(pointlist1.shape, pointlist2.shape)
-#
-##    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
-#
-##    filter_n = np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))
-##    filter_n = 1000
-#    filter_n = int(np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))/2)
-#    print(filter_n)
-#    print("filter_points")
-#    pointlist1 = filter_points(pointlist1, filter_n)
-#    pointlist2 = filter_points(pointlist2, filter_n)
-#    print(pointlist1.shape, pointlist2.shape)
-#    np.save("pointlist1_filter", pointlist1)
-#    np.save("pointlist2_filter", pointlist2)
+    threshold = 1e-3
+#    pointlist1 = point_detection_pyramid(img1, threshold, 3)
+#    pointlist2 = point_detection_pyramid(img2, threshold, 3)
+    pointlist1 = harris.harris_detector(img1, threshold) 
+    pointlist2 = harris.harris_detector(img2, threshold)
+    print(pointlist1.shape, pointlist2.shape)
 
-    pointlist1 = np.load("pointlist1_filter.npy")
-    pointlist2 = np.load("pointlist2_filter.npy")
+#    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
+
+#    filter_n = np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))
+#    filter_n = 1000
+    filter_n = int(np.min(np.array([pointlist1.shape[0], pointlist2.shape[0]]))/2)
+    print(filter_n)
+    print("filter_points")
+    pointlist1 = filter_points(pointlist1, filter_n)
+    pointlist2 = filter_points(pointlist2, filter_n)
+    print(pointlist1.shape, pointlist2.shape)
+    np.save("pointlist1_filter", pointlist1)
+    np.save("pointlist2_filter", pointlist2)
+
+#    pointlist1 = np.load("pointlist1_filter.npy")
+#    pointlist2 = np.load("pointlist2_filter.npy")
 
 #    show_correspondences(img1, img2, np.array([p.coords for p in pointlist1]), np.array([p.coords for p in pointlist2]), corrs=False)
 
@@ -64,7 +66,7 @@ def find_correspondences(img1, img2):
     
     coords1 = np.array([pointlist1[i].coords for i in indices1])
     coords2 = np.array([pointlist2[i].coords for i in indices2])
-#    show_correspondences(img1, img2, coords1, coords2)
+    show_correspondences(img1, img2, coords1, coords2)
 
     matched_points = np.array([(pointlist1[i1], pointlist2[i2]) for i1, i2 in zip(indices1, indices2)])
     correspondences1, correspondences2 = RANSAC_filter(matched_points)
@@ -76,9 +78,33 @@ def find_correspondences(img1, img2):
     correspondences1 = np.load("correspondences1.npy")
     correspondences2 = np.load("correspondences2.npy")
 
-#    show_correspondences(img1, img2, correspondences1, correspondences2)
+    show_correspondences(img1, img2, correspondences1, correspondences2)
 
     return(correspondences1, correspondences2)
+
+def point_detection_pyramid(img, threshold, layers):
+    """
+    detect points on different scales
+    for each layer, image is sized down in order to detect more general points
+    """
+    threshold = 1e-3
+    pointlist = []
+    for i in range(layers):
+        img_scaled = transform.rescale(img, 1/(np.power(2,i))) 
+        points = harris.harris_detector(img_scaled, threshold)
+        show_correspondences(img_scaled, img_scaled, np.array([p.coords for p in points]), np.array([p.coords for p in points]), corrs=False)
+        #scale the points back
+        for p in points:
+            p.x = np.power(2,i)*p.x
+            p.y = np.power(2,i)*p.y
+            p.coords[0] = p.x
+            p.coords[1] = p.y
+        pointlist.extend(points)
+    show_correspondences(img, img, np.array([p.coords for p in pointlist]), np.array([p.coords for p in pointlist]), corrs=False)
+
+    return np.array(pointlist)
+
+
 
 def filter_points(points, amount):
     final_set = []
@@ -112,6 +138,7 @@ def extractDescriptors(pointlist, img, rotation=False):
         #calculates the x and y gradients of the image
         g1 = harris.fspecial_gaussian([9, 9], 1)  # Gaussian with sigma_d
         img_blur = conv2(img, g1, 'same')  # blur image with sigma_d
+        img_blur = img
         Ix = conv2(img_blur, np.array([[-1, 0, 1]]), 'same')  # take x derivative
         Iy = conv2(img_blur, np.transpose(np.array([[-1, 0, 1]])), 'same')  # take y derivative
     for p in pointlist:
@@ -119,11 +146,10 @@ def extractDescriptors(pointlist, img, rotation=False):
 #            if(p.x < 29 or p.x > img.shape[])
             #calculate gradient orientation
             theta = np.degrees(np.arctan(np.divide(Iy[p.y, p.x], Ix[p.y, p.x])))
-#            print(theta)
             #window needs to be big enough so that even if it's rotated by 45 degrees, a 40x40 window can be taken from the center
             half_edge = 29 #int(np.ceil(40 / np.sqrt(2)))*2=58, close enough
             window = img[(p.y-half_edge) : (p.y+half_edge), (p.x-half_edge) : (p.x+half_edge)]
-            rotated = transform.rotate(window, theta)
+            rotated = transform.rotate(window, -theta)
 
             window_rotated = rotated[9:49, 9:49]
             window_resized = transform.resize(window_rotated, (8,8), anti_aliasing=True)
@@ -142,15 +168,18 @@ def extractDescriptors(pointlist, img, rotation=False):
         #window_sampled = np.divide(np.subtract(window_sampled, mean), sigma)
         #p.window = window_sampled
 
-#        f, axarr = plt.subplots(1,6)
-#        axarr[0].imshow(window)
-#        axarr[1].imshow(window_resized)
-#        window_res_rot = transform.rotate(window_resized, theta)
+#        window_orig = img[(p.y-20) : (p.y+20), (p.x-20) : (p.x+20)]
+#        window_resized_orig = transform.resize(window, (8,8), anti_aliasing=True)
+#
+#        f, axarr = plt.subplots(1,5)
+#        axarr[0].imshow(window_orig)
+#        axarr[1].imshow(window_resized_orig)
+#        window_res_rot = transform.rotate(window_resized_orig, -theta)
 #        axarr[2].imshow(window_res_rot)
-#        axarr[3].imshow(rotated)
-#        axarr[4].imshow(window_rotated)
+#        axarr[3].imshow(window)
+#        axarr[4].imshow(window_resized)
 #        axarr[5].imshow(window_rot_res)
-#        plt.show()
+        plt.show()
 
     return pointlist
 
@@ -170,6 +199,11 @@ def sample(img, n):
     return img
 
 def show_correspondences(img1, img2, indices1_orig, indices2_orig, corrs=True):
+    if(img1.shape[0] < img2.shape[0]):
+        img1 = np.pad(img1, (0,0), (0, img2.shape[0]-img1.shape[0]), "constant")
+    elif(img2.shape[0] < img1.shape[0]):
+        img2 = np.pad(img2, ((0, img1.shape[0]-img2.shape[0]), (0,0)), "constant")
+         
     img_cat = np.concatenate((img1, img2), axis=1)
     img1_x = img1.shape[1]
     indices1 = np.copy(indices1_orig)
@@ -232,7 +266,7 @@ def RANSAC_filter(matched_points):
     coords2 = np.array([t[1].coords for t in matched_points])
 
     best = {"vote":0, "matched_points":[]}
-    while best["vote"] < 10:
+    while best["vote"] < 7:
         for i in range(10000):
             #select 4 random indices and get the points at these indices
             point_ind = random.sample(range(0, len(matched_points)), 4)
