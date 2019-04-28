@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import cv2
 import time
 from scipy.signal import convolve2d as conv2
-from scipy.optimize import minimize
-from skimage import io, filters, draw, transform
+from scipy.optimize import minimize, least_squares
+from skimage import io, filters, draw, transform, exposure
 from matplotlib import pyplot as plt
 
 def calc_saliency(img):
@@ -16,17 +16,26 @@ def calc_saliency(img):
     """
     def get_q(p_index, direction):
         """
-        get the exact index of q, calculated by moving sqrt(2) along the edge in a specified direction
+        get the exact index of q, calculated by moving sqrt(2) along the edge in a specified direction (either in the direction of the edge (orientation + pi/2), or in the other direction of the edge (orientation + p/2 + pi))
         """
-        theta = orient[p_index[1], p_index[0]] + np.pi/2.0 + direction*np.pi
-#        print(np.rad2deg( orient[p_index[1], p_index[0]]))
-
-#        unit_vector = np.divide(np.array([np.cos(theta), np.sin(theta)]), magn[p_index[1], p_index[0]])
-#        vector = unit_vector * np.sqrt(2)
-#        q_exact = p_index + vector
-        q_exact = np.array([ p_index[0] + np.cos(theta) * np.sqrt(2), p_index[1] + np.sin(theta) * np.sqrt(2) ])
-#        print("q: " + str(q_exact))
+        edge_dir = orient[p_index[1], p_index[0]] + np.pi/2.0 + direction*np.pi
+        q_exact = np.array([ p_index[0] + np.cos(edge_dir) * np.sqrt(2), p_index[1] + np.sin(edge_dir) * np.sqrt(2) ])
         return q_exact
+
+    def get_qs(direction):
+        """
+        get the exact index of q, calculated by moving sqrt(2) along the edge in a specified direction (either in the direction of the edge (orientation + pi/2), or in the other direction of the edge (orientation + p/2 + pi))
+        """
+        edge_dirs = orient + np.pi/2.0 + direction*np.pi
+        positions = np.indices((img.shape))
+        q_vector_x = np.cos(edge_dirs) * np.sqrt(2)
+        q_vector_y = np.sin(edge_dirs) * np.sqrt(2)
+        q_vectors = np.dstack((q_vector_y, q_vector_x))
+        #creates an array with the position (index) at each index
+        indices = np.swapaxes(np.swapaxes(np.indices((orient.shape)), 0, 1), 1, 2)
+        qs_flippedindex = indices + q_vectors
+        qs_indices = np.flip(qs_flippedindex, axis = 2)
+        return qs_indices
 
     def interpolate_q(q, array):
         pixels = np.array([ np.floor(q), np.ceil(q), np.array([np.floor(q[0]), np.ceil(q[1])]), np.array([np.ceil(q[0]), np.floor(q[1])]) ]).astype(int)
@@ -54,6 +63,27 @@ def calc_saliency(img):
 #            y = array.shape[0]-1
 #        return array[y, x]
 
+    def interpolate_qs(qs, array):
+        interpol_array = np.zeros((img.shape))
+        for y in range(0, qs.shape[0]):
+            for x in range(0, qs.shape[1]):
+                q = qs[y,x]
+                pixels = np.array([ np.floor(q), np.ceil(q), np.array([np.floor(q[0]), np.ceil(q[1])]), np.array([np.ceil(q[0]), np.floor(q[1])]) ]).astype(int)
+                interpolated = 0 # array[pixels[0][1], pixels[0][0]] + array[pixels[1]]
+                samples = 0
+                for p in pixels:
+                    try:
+                        interpolated += array[p[1], p[0]]
+                        samples += 1
+                    except IndexError:
+                        continue
+                if samples == 0:
+                    interpolated = 0
+                else:
+                    interpolated /= samples
+                interpol_array[y,x] = interpolated
+        return interpol_array
+
     def w_theta(p, q):
         """
         measures similarity of the local edge orientations (using gradient orientation, but that should not make a difference)
@@ -63,15 +93,29 @@ def calc_saliency(img):
         weight = np.exp( -1 * np.power((p_theta -  q_theta), 2) / (2 * np.pi/5.0))
         return weight
 
+    def w_theta_vectorized(qs):
+        """
+        measures similarity of the local edge orientations (using gradient orientation, but that should not make a difference)
+        """
+        p_theta = orient
+        q_theta = interpolate_qs(qs, orient)
+#        q_theta = interpolate_q(qs, orient)
+        weight = np.exp( -1 * np.power((p_theta -  q_theta), 2) / (2 * np.pi/5.0))
+        return weight
+
+    def w_alpha_vectorized(qs):
+        #TODO don't know what this is supposed to do
+        return np.ones(img.shape)
+    
     def w_alpha(q):
         #TODO don't know what this is supposed to do
         return 1
 
     #TODO steerable filters instead of finite difference?
     print(img.shape)
-    img_blurred = filters.gaussian(img, sigma=1)
-    gx = conv2(img_blurred, np.array([[-1, 0, 1]]), 'same', 'symm')  # take x derivative
-    gy = conv2(img_blurred, np.transpose(np.array([[-1, 0, 1]])), 'same', 'symm')  # take y derivative
+    filter = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    gx = conv2(img, filter, 'same', 'symm')  # take x derivative
+    gy = conv2(img, np.transpose(filter), 'same', 'symm')  # take y derivative
 
     #calculate gradient orientation in rad
 #    orient = np.arctan(np.divide(gy, gx))
@@ -84,55 +128,62 @@ def calc_saliency(img):
 #    axarr[1].imshow(normalized_magn)
 #    plt.show()
 
-    m0_prev = np.zeros((img.shape))
-    m1_prev = np.zeros((img.shape))
-    m0_new = np.zeros((img.shape))
-    m1_new = np.zeros((img.shape))
-    scale = 20
-    test_img = transform.rescale(normalized_magn, scale)
-    start = time.time()
-    for i in range(40):
-        for y in range(0, img.shape[0]):
-            for x in range(0, img.shape[1]):
-                q = get_q([x,y], 0)
-#                rr, cc = draw.line(y*scale, x*scale, np.round(q[1]).astype(int)*scale, np.round(q[0]).astype(int)*scale)
-#                try:
-#                    test_img[rr, cc] = 1
-#                except IndexError:
-#                    pass
-#                io.imshow(test_img)
-#                io.show()
-                m0_new[y,x] = w_alpha(q) * w_theta([x,y], q) * (interpolate_q(q, normalized_magn) + interpolate_q(q, m0_prev))
-                q = get_q([x,y], 1)
-                m1_new[y,x] = w_alpha(q) * w_theta([x,y], q) * (interpolate_q(q, normalized_magn) + interpolate_q(q, m1_prev))
-#        io.imshow(test_img)
-#        io.show()
-        m0_prev = m0_new
-        m1_prev = m1_new
-#        print(m0_prev)
-#    io.imshow(m0_prev)
-#    io.show()
-#    io.imshow(m1_prev)
-#    io.show()
-    end = time.time()
-    print(end - start)
-
-    lengths = m0_new + m1_new + normalized_magn
-    np.save("lengths-out.npy", lengths)
-#    lengths = np.load("./lengths-tiger-10it.npy")
+#    m0_prev = np.zeros((img.shape))
+#    m1_prev = np.zeros((img.shape))
+#    m0_new = np.zeros((img.shape))
+#    m1_new = np.zeros((img.shape))
+#    scale = 20
+#    test_img = transform.rescale(normalized_magn, scale)
+#    start = time.time()
+#    m0_qs = get_qs(0)
+#    m1_qs = get_qs(1)
+#    w_alphas_0 = w_alpha_vectorized(m0_qs)
+#    w_alphas_1 = w_alpha_vectorized(m1_qs)
+#    w_thetas_0 = w_theta_vectorized(m0_qs)
+#    w_thetas_1 = w_theta_vectorized(m1_qs)
+#    interpol_magn_0 = interpolate_qs(m0_qs, normalized_magn)
+#    interpol_magn_1 = interpolate_qs(m1_qs, normalized_magn)
+#    for i in range(40):
+#        m0_new = w_alphas_0 * w_thetas_0 * (interpol_magn_0 + interpolate_qs(m0_qs, m0_prev))
+#        m1_new = w_alphas_1 * w_thetas_1 * (interpol_magn_1 + interpolate_qs(m1_qs, m1_prev))
+#        m0_prev = m0_new
+#        m1_prev = m1_new
+#
+#    end = time.time()
+#    print("execution time: " + str(end - start) + "s")
+#
+#    lengths = m0_new + m1_new + normalized_magn
+#    np.save("lengths-pixi.npy", lengths)
+    lengths = np.load("./lengths-pixi.npy")
 
     sx = np.power(np.cos(orient), 2) * lengths * gx
     sy = np.power(np.sin(orient), 2) * lengths * gy
 
-    f, axarr = plt.subplots(1,5)
-    axarr[0].imshow(img)
-    axarr[1].imshow(gx + gy + 0.5)
-    axarr[2].imshow(normalized_magn)
-    axarr[3].imshow(lengths)
-    axarr[4].imshow(np.abs(sx + sy))
+    f, axarr = plt.subplots(1,3)
+#    axarr[0].imshow(img)
+    axarr[0].imshow(gx + gy + 0.5)
+#    axarr[2].imshow(normalized_magn)
+    axarr[1].imshow(lengths)
+    axarr[2].imshow(sx + sy)
     plt.show()
 
-    return sx, sy
+#    io.imsave("0_grayscale.jpg", img)
+#    io.imsave("1_gradients.jpg", exposure.rescale_intensity(gx + gy + 0.5))
+#    io.imsave("2_normalized_gradients.jpg", exposure.rescale_intensity(normalized_magn))
+#    io.imsave("3_lengths.jpg", exposure.rescale_intensity(lengths))
+#    io.imsave("4_final.jpg", exposure.rescale_intensity(np.abs(sx + sy)))
+
+    el = lengths
+    eo = orient
+
+    return sx, sy, el, eo
+
+def get_gradients(img):
+    filter = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    gx = conv2(img, filter, 'same', 'symm')  # take x derivative
+    gy = conv2(img, np.transpose(filter), 'same', 'symm')  # take y derivative
+    return gx, gy
+
 
 def block_normalize(img):
     """
@@ -170,6 +221,8 @@ def constrained_filter(d, g, w, u):
         return np.sum(Ed + Eg)
 
     res = minimize(loss, u, method="CG")    
+#    u_flat = u.flatten()
+#    res = least_squares(loss, u_flat)
     np.save("result.npy", res.x)
     np.save("jacobien.npy", res.jac)
     return res.x
@@ -178,8 +231,8 @@ def basic_sharpening(img):
     img_blurred = filters.gaussian(img, sigma=1)
     gx = conv2(img_blurred, np.array([[-1, 0, 1]]), 'same')  # take x derivative
     gy = conv2(img_blurred, np.transpose(np.array([[-1, 0, 1]])), 'same')  # take y derivative
-    cs = 10000
-    c1 = 1
+    cs = 2
+    c1 = 0.5
     d = img
     g = np.dstack((gx * cs, gy * cs))
     print(gx[0,0])
@@ -191,10 +244,10 @@ def basic_sharpening(img):
     
     w = np.dstack((np.full(img.shape, c1), np.ones(img.shape), np.ones(img.shape)))
     u = img#np.dstack((img, gx, gy))
-    #start = time.time()
-    #res = constrained_filter(d, g, w, u)
-    #end = time.time()
-    #print(str((end-start)/60) + "min")
+    start = time.time()
+    res = constrained_filter(d, g, w, u)
+    end = time.time()
+    print(str((end-start)/60) + "min")
 
     res = np.load("result.npy")
     res = np.reshape(res, (u.shape))
@@ -204,5 +257,66 @@ def basic_sharpening(img):
     axarr[1].imshow(res)
     plt.show()
 
+def saliency_filter(img, s=None):
+    if not s:
+        sx,sy = salient_gradients(img)
+    else:
+        sx = s[0]
+        sy = s[1]
+    d = img
+    gx, gy = get_gradients(img)
+    gx = gx + c2 * sx
+    gy = gy + c2 * sy
+    wd = c1
+    #TODO robust weighting scheme
+    wx = np.ones(img.shape)
+    wy = np.ones(img.shape)
+
+def saliency_sharpening_noopt(img, s=None):
+    try:
+        num_channels = img.shape[2]
+    except IndexError:
+        num_channels = 1
+        img = np.reshape(img, (img.shape[0], img.shape[1], 1))
+    channels = []
+    for i in range(num_channels):
+        if not s:
+            sx, sy = calc_saliency(img)
+        else:
+            sx = s[0]
+            sy = s[1]
+        out_img = img + 0.03 * (sx + sy)
+        gx, gy = get_gradients(img)
+        out_img_ns = img + 0.3 * (gx + gy)
+    io.imshow(out_img)
+    io.show()
+    f, axarr = plt.subplots(1,2)
+    axarr[0].imshow(out_img)
+    axarr[1].imshow(out_img_ns)
+    plt.show()
+#    io.imsave("sharpened_test.jpg", np.clip(out_img, 0, 1))
+#    io.imsave("sharpened_test_ns.jpg", np.clip(out_img_ns, 0, 1))
+
+
+def npr_filter(img, sigma, e=None):
+    """
+    sigma is the abstraction amount
+    c2 (>=1) controls the amount of exaggeration of local contrast across long edges
+    c1 (>=0) controls how much the stylized image is allowed to drift from the input image
+    """
+    d = img
+    gx_base, gy_base = get_gradients(img)
+
+    exponent = np.divide(np.power(el, 2), np.power(-2 * sigma, 2 ))
+    n = c2 * (1 - np.exp(exponent))
+
+    gx = gx_base * np.power(np.cos(eo), 2) * n
+    gy = gy_base * np.power(np.sin(eo), 2) * n
+
+def npr_filter_noopt(img, ):
+    pass
+
+
+    
 
 
