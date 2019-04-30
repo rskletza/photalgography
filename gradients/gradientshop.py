@@ -118,50 +118,50 @@ def calc_saliency(img):
 #    axarr[1].imshow(normalized_magn)
 #    plt.show()
 
-#    m0_prev = np.zeros((img.shape))
-#    m1_prev = np.zeros((img.shape))
-#    m0_new = np.zeros((img.shape))
-#    m1_new = np.zeros((img.shape))
-#    scale = 20
-#    test_img = transform.rescale(normalized_magn, scale)
-#    start = time.time()
-#    m0_qs = get_qs(0)
-#    m1_qs = get_qs(1)
-#    w_alphas_0 = w_alpha_vectorized(m0_qs)
-#    w_alphas_1 = w_alpha_vectorized(m1_qs)
-#    w_thetas_0 = w_theta_vectorized(m0_qs)
-#    w_thetas_1 = w_theta_vectorized(m1_qs)
-#    interpol_magn_0 = interpolate_qs(m0_qs, normalized_magn)
-#    interpol_magn_1 = interpolate_qs(m1_qs, normalized_magn)
-#    for i in range(40):
-#        m0_new = w_alphas_0 * w_thetas_0 * (interpol_magn_0 + interpolate_qs(m0_qs, m0_prev))
-#        m1_new = w_alphas_1 * w_thetas_1 * (interpol_magn_1 + interpolate_qs(m1_qs, m1_prev))
-#        m0_prev = m0_new
-#        m1_prev = m1_new
-#
-#    end = time.time()
-#    print("execution time: " + str(end - start) + "s")
-#
-#    lengths = m0_new + m1_new + normalized_magn
-#    np.save("lengths-flo_me.npy", lengths)
-    lengths = np.load("./lengths-toronto.npy")
+    m0_prev = np.zeros((img.shape))
+    m1_prev = np.zeros((img.shape))
+    m0_new = np.zeros((img.shape))
+    m1_new = np.zeros((img.shape))
+    scale = 20
+    test_img = transform.rescale(normalized_magn, scale)
+    start = time.time()
+    m0_qs = get_qs(0)
+    m1_qs = get_qs(1)
+    w_alphas_0 = w_alpha_vectorized(m0_qs)
+    w_alphas_1 = w_alpha_vectorized(m1_qs)
+    w_thetas_0 = w_theta_vectorized(m0_qs)
+    w_thetas_1 = w_theta_vectorized(m1_qs)
+    interpol_magn_0 = interpolate_qs(m0_qs, normalized_magn)
+    interpol_magn_1 = interpolate_qs(m1_qs, normalized_magn)
+    for i in range(40):
+        m0_new = w_alphas_0 * w_thetas_0 * (interpol_magn_0 + interpolate_qs(m0_qs, m0_prev))
+        m1_new = w_alphas_1 * w_thetas_1 * (interpol_magn_1 + interpolate_qs(m1_qs, m1_prev))
+        m0_prev = m0_new
+        m1_prev = m1_new
+
+    end = time.time()
+    print("execution time: " + str(end - start) + "s")
+
+    lengths = m0_new + m1_new + normalized_magn
+    np.save("lengths-out.npy", lengths)
+#    lengths = np.load("./lengths_pixi_grayscale.npy")
 
     sx = np.power(np.cos(orient), 2) * lengths * gx
     sy = np.power(np.sin(orient), 2) * lengths * gy
 
-    f, axarr = plt.subplots(1,3)
-#    axarr[0].imshow(img)
-    axarr[0].imshow(gx + gy + 0.5)
-#    axarr[2].imshow(normalized_magn)
-    axarr[1].imshow(lengths)
-    axarr[2].imshow(sx + sy)
-    plt.show()
+#    f, axarr = plt.subplots(1,3)
+##    axarr[0].imshow(img)
+#    axarr[0].imshow(gx + gy + 0.5)
+##    axarr[2].imshow(normalized_magn)
+#    axarr[1].imshow(lengths)
+#    axarr[2].imshow(sx + sy)
+#    plt.show()
 
 #    io.imsave("0_grayscale.jpg", img)
-    io.imsave("1_gradients.jpg", exposure.rescale_intensity(gx + gy + 0.5))
-    io.imsave("2_normalized_gradients.jpg", exposure.rescale_intensity(normalized_magn))
-    io.imsave("3_lengths.jpg", exposure.rescale_intensity(lengths))
-    io.imsave("4_final.jpg", exposure.rescale_intensity(np.abs(sx + sy)))
+#    io.imsave("1_gradients.jpg", exposure.rescale_intensity(gx + gy + 0.5))
+#    io.imsave("2_normalized_gradients.jpg", exposure.rescale_intensity(normalized_magn))
+#    io.imsave("3_lengths.jpg", exposure.rescale_intensity(lengths))
+#    io.imsave("4_final.jpg", exposure.rescale_intensity(np.abs(sx + sy)))
 
     el = lengths
     eo = orient
@@ -172,16 +172,28 @@ def get_gradients(img):
     """
     calculate gradients of the image. The method used by this function needs to match the equations of the matrix of equations (in this case, subtracting the right/lower pixel from the left/upper pixel to get the gradient of a pixel)
     """
+#    gx = np.roll(img, -1, axis=0) - np.roll(img, 1, axis=0)
+#    gy = np.roll(img, -1, axis=1) - np.roll(img, 1, axis=1)
+#
+#    #correct the edges to 0
+#    gx[0,:] = 0
+#    gx[gx.shape[0]-1,:] = 0
+#
+#    gy[:,0] = 0
+#    gy[:,gy.shape[1]-1] = 0
 
-    gx = np.roll(img, -1, axis=0) - np.roll(img, 1, axis=0)
-    gy = np.roll(img, -1, axis=1) - np.roll(img, 1, axis=1)
+    gx = np.diff(img, 1, 1);
+    gy = np.diff(img, 1, 0);
 
-    #correct the edges to 0
-    gx[0,:] = 0
-    gx[gx.shape[0]-1,:] = 0
+    gx = np.hstack((gx, np.zeros((img.shape[0], 1))))
+    gy = np.vstack((gy, np.zeros((1, img.shape[1]))))
 
-    gy[:,0] = 0
-    gy[:,gy.shape[1]-1] = 0
+#    f, axarr = plt.subplots(1,4)
+#    axarr[0].imshow(gx + 0.5)
+#    axarr[1].imshow(gy + 0.5)
+#    axarr[2].imshow(gx2 + 0.5)
+#    axarr[3].imshow(gy2 + 0.5)
+
 
     return gx, gy
 
@@ -206,7 +218,7 @@ def block_normalize(img):
 #        normalized_img = normalized_img + np.absolute(np.min(normalized_img))
     return np.abs(normalized_img)
 
-def build_Ad(img, wd, d):
+def build_Ad(wd, d):
     """
     creates the part of the equation (Ax = b) responsible for the pixel values
     """
@@ -214,36 +226,41 @@ def build_Ad(img, wd, d):
     Ad = sparse.diags(wd.flatten())
     return Ad, bd
 
-def build_Agx(img, wgx, gx):
+def build_Agx(wgx, gx):
     """
     builds the equations for the system Ax = b responsible for the x derivative
     omits the outer edge of the image, because the derivative is not well defined there
     """
-    n = img.shape[0] * img.shape[1]
+    n = gx.shape[0] * gx.shape[1]
     bgx = gx[:,1:gx.shape[1]-1].flatten()
     Agx = sparse.dok_matrix((bgx.shape[0], n))
     A_row = 0
-    for y in range(img.shape[0]):
-        for x in range(1,img.shape[1]-1):
-            Agx[A_row, flatten_index(x+1,y,img.shape)] = wgx[y,x]
-            Agx[A_row, flatten_index(x-1,y,img.shape)] = -(wgx[y,x])
+#    for y in range(gx.shape[0]):
+#        for x in range(1,gx.shape[1]-1):
+#            Agx[A_row, flatten_index(x+1,y,gx.shape)] = wgx[y,x]
+#            Agx[A_row, flatten_index(x-1,y,gx.shape)] = -(wgx[y,x])
+#            A_row += 1
+    for y in range(gx.shape[0]):
+        for x in range(1,gx.shape[1]-1):
+            Agx[A_row, flatten_index(x+1,y,gx.shape)] = wgx[y,x]
+            Agx[A_row, flatten_index(x,y,gx.shape)] = -(wgx[y,x])
             A_row += 1
 
     return Agx, bgx
 
-def build_Agy(img, wgy, gy):
+def build_Agy(wgy, gy):
     """
     builds the equations for the system Ax = b responsible for the y derivative
     omits the outer edge of the image, because the derivative is not well defined there
     """
-    n = img.shape[0] * img.shape[1]
+    n = gy.shape[0] * gy.shape[1]
     bgy = gy[1:gy.shape[0]-1,:].flatten()
     Agy = sparse.dok_matrix((bgy.shape[0], n))
     A_row = 0
-    for y in range(1,img.shape[0]-1):
-        for x in range(img.shape[1]):
-            Agy[A_row, flatten_index(x,y+1,img.shape)] = wgy[y,x]
-            Agy[A_row, flatten_index(x,y-1,img.shape)] = -(wgy[y,x])
+    for y in range(1,gy.shape[0]-1):
+        for x in range(gy.shape[1]):
+            Agy[A_row, flatten_index(x,y+1,gy.shape)] = wgy[y,x]
+            Agy[A_row, flatten_index(x,y,gy.shape)] = -(wgy[y,x])
             A_row += 1
 
     return Agy, bgy
@@ -260,7 +277,7 @@ def solve_for_constraints(d, g, w, img):
     d: intensity constraints (1 channel)
     g: gradient constraints (h and v, 2 channels)
     w: weights of d and g (3 channels)
-    u: input image (intensities, h gradients, v gradients: 3 channels)
+    img: input image (used to adjust the skewed output range)
     """
     gx = g[:,:,0]
     gy = g[:,:,1]
@@ -268,61 +285,73 @@ def solve_for_constraints(d, g, w, img):
     wgx = w[:,:,1]
     wgy = w[:,:,2]
 
-    Ad, b = build_Ad(img, wd, d)
-    Agx, bx = build_Agx(img, wgx, gx)
-    print('built Agx')
-    Agy, by = build_Agy(img, wgy, gy)
+    Ad, bd = build_Ad(wd, d)
+    Agx, bgx = build_Agx(wgx, gx)
+    Agy, bgy = build_Agy(wgy, gy)
 
     A = sparse.vstack((Ad, Agx, Agy))
-    b = np.concatenate((b, bx, by))
-    print(A.shape)
-    print(b.shape)
+    b = np.concatenate((bd, bgx, bgy))
 
-    res = sparse.linalg.lsqr(A, b)
-    f = res[0]
-    print(f)
+    res = sparse.linalg.lsqr(A, b, atol=0, btol=0, conlim=0)[0]
+    res = np.reshape(res, img.shape)
 
-    return np.reshape(f, img.shape)
+    #correct image range
+    input_mean = np.mean(img[:]);
+    res_mean = np.mean(res[:]);
+
+    offset = input_mean - res_mean;
+    fixed_res = res + offset
+    fixed_res = np.maximum(0, np.minimum(1, fixed_res))
+
+    return fixed_res
 
 def basic_sharpening(img):
     gx, gy = get_gradients(img)
-    cg = 1.1
-    cd = 1
+    cg = 1.5
+    wg = 1
+    cd = 0.6#3e-02
     d = img
     g = np.dstack((gx * cg, gy * cg))
-    f, axarr = plt.subplots(1,2)
-    axarr[0].imshow(gx + gy + 0.5)
-    axarr[1].imshow(d + (gx + gy))
-    plt.show()
-
     
-    w = np.dstack((np.full(img.shape, cd), np.ones(img.shape), np.ones(img.shape)))
+    w = np.dstack((np.full(img.shape, cd), np.full(img.shape, wg), np.full(img.shape, wg)))
     start = time.time()
     res = solve_for_constraints(d, g, w, img)
     end = time.time()
-    print(str((end-start)/60) + "min")
+    print(str(end-start) + "s")
+#    io.imshow(res)
+#    io.show()
+
+    return res
+
+def salient_sharpening(img, params=None):
+    gx, gy = get_gradients(img)
+    if params is None:
+        sx,sy,_,_ = calc_saliency(img)
+    else:
+        sx = params[0]
+        sy = params[1]
+    cg = 0.4
+    wg = 1
+    cd = 0.8#3e-02
+    d = img
+    g = np.dstack((gx + cg * sx, gy + cg * sy))
+    
+    w = np.dstack((np.full(img.shape, cd), np.full(img.shape, wg), np.full(img.shape, wg)))
+    start = time.time()
+    res = solve_for_constraints(d, g, w, img)
+    end = time.time()
+    print(str(end-start) + "s")
+#    io.imshow(res)
+#    io.show()
 
     f, axarr = plt.subplots(1,2)
     axarr[0].imshow(img)
     axarr[1].imshow(res)
     plt.show()
-
-    return res
-
-def saliency_filter(img, s=None):
-    if not s:
-        sx,sy = salient_gradients(img)
+    if params is not None:
+        return res
     else:
-        sx = s[0]
-        sy = s[1]
-    d = img
-    gx, gy = get_gradients(img)
-    gx = gx + c2 * sx
-    gy = gy + c2 * sy
-    wd = c1
-    #TODO robust weighting scheme
-    wx = np.ones(img.shape)
-    wy = np.ones(img.shape)
+        return res, np.array([sx, sy])
 
 def saliency_sharpening_noopt(img, s=None):
     try:
@@ -376,9 +405,6 @@ def npr_filter(img, sigma, e=None):
     gx = gx_base * np.power(np.cos(eo), 2) * n
     gy = gy_base * np.power(np.sin(eo), 2) * n
 
-def npr_filter_noopt(img, ):
-    pass
-
 def filter_img(img, filter, params=None):
     try:
         num_channels = img.shape[2]
@@ -390,7 +416,11 @@ def filter_img(img, filter, params=None):
     out_channels_ns = []
     for i in range(num_channels):
         channel = img[:,:,i]
-        filtered = filter(img[:,:,i])
+        if params is not None:
+            filtered = filter(img[:,:,i], params[i])
+        else:
+            filtered, new_params = filter(img[:,:,i])
+            np.save("./params/params" + str(i) + ".npy", new_params)
         out_channels.append(filtered)
 
     if num_channels > 1:
